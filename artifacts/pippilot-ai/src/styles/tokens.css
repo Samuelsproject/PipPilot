@@ -1,0 +1,10 @@
+:root {
+  --pp-color-canvas: #0f151d;
+  --pp-color-surface: #121a23;
+  --pp-color-surface-raised: #141d26;
+  --pp-color-emerald: #6ee7b7;
+  --pp-color-electric-blue: #38bdf8;
+  --pp-color-purple-glow: rgb(152 117 184 / 17%);
+  --pp-color-warning: #fdba74;
+  --pp-color-danger: #f87171;
+}
