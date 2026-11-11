@@ -1,219 +1,142 @@
-import {
-  ArrowDownRight,
-  ArrowRight,
-  BarChart3,
-  CalendarDays,
-  Check,
-  CircleDot,
-  CreditCard,
-  Database,
-  LockKeyhole,
-  Plug,
-  Settings2,
-  ShieldAlert,
-  Sparkles,
-  Workflow,
-} from 'lucide-react';
-import { StatusPill } from '@/components/status-pill';
+import { useState } from 'react';
+import { Link } from 'wouter';
+import { ArrowRight, CalendarDays, ChevronRight, CircleHelp, Clock3, Compass, ServerOff, ShieldCheck, Sparkles, WifiOff } from 'lucide-react';
+import { DashboardButton, DemoTag, Panel, SectionHeading, SignalCard, StatCard, StatusBadge } from '@/components/dashboard-ui';
 
-const plannedCapabilities = [
-  {
-    title: 'Market context',
-    detail: 'A considered view of market data and the events around it.',
-    icon: BarChart3,
-    tag: 'Market data',
-  },
-  {
-    title: 'Analysis, made legible',
-    detail: 'Structured trade ideas with the reasoning visible, not hidden.',
-    icon: Sparkles,
-    tag: 'Trading analysis',
-  },
-  {
-    title: 'Calendar awareness',
-    detail: 'Economic events presented as context for your own decisions.',
-    icon: CalendarDays,
-    tag: 'Economic calendar',
-  },
-  {
-    title: 'Your platform, your control',
-    detail: 'A future MT5 connection designed around clear permissions.',
-    icon: Plug,
-    tag: 'MT5 connection',
-  },
+const times = ['M5', 'M15', 'H1', 'H4', 'D1'];
+const marketWatch = [
+  ['XAUUSD', '2,184.30'],
+  ['EURUSD', '1.08426'],
+  ['GBPUSD', '1.27148'],
+  ['USDJPY', '149.382'],
+  ['US30', '38,742.6'],
+  ['US100', '17,965.4'],
+];
+const engineStatuses = [
+  ['Technical analysis engine', 'status-engine-technical-analysis'],
+  ['Economic news engine', 'status-engine-economic-news'],
+  ['Risk management engine', 'status-engine-risk-management'],
 ];
 
-const setupItems = [
-  { title: 'Supabase authentication', note: 'Accounts and sessions', icon: LockKeyhole },
-  { title: 'FastAPI services', note: 'Application foundation', icon: Workflow },
-  { title: 'MT5 connectivity', note: 'Broker platform access', icon: Plug },
-  { title: 'Market data', note: 'Live market feeds', icon: Database },
-  { title: 'Economic calendar', note: 'Scheduled market events', icon: CalendarDays },
-  { title: 'Trading analysis', note: 'Explainable decision support', icon: Sparkles },
-  { title: 'Payments', note: 'Billing and subscriptions', icon: CreditCard },
-  { title: 'Admin management', note: 'Product operations', icon: Settings2 },
-];
+function DemoChart({ timeframe }: { timeframe: string }) {
+  return <div data-testid="chart-demo-preview" className="mt-3 overflow-hidden rounded-xl border border-white/[.05] bg-[var(--pp-color-surface-raised)] p-3">
+    <div className="flex items-center justify-between"><span className="font-mono text-[10px] text-[var(--pp-muted)]">EUR / USD <span className="text-[9px]">· illustrative symbol</span></span><span className="text-[9px] text-[var(--pp-muted)]">Preview · {timeframe}</span></div>
+    <svg viewBox="0 0 600 160" role="img" aria-label={`Illustrative chart preview, ${timeframe} selection; not market data`} className="mt-3 h-[142px] w-full">
+      {[25, 62, 99, 136].map((y) => <line key={y} x1="0" y1={y} x2="600" y2={y} stroke="rgba(220,240,230,.07)" strokeDasharray="3 6" />)}
+      <path d="M0 113 C27 105 30 93 52 101 S80 85 105 96 S132 78 154 83 S183 101 205 85 S236 75 256 82 S278 60 304 70 S336 89 357 76 S382 49 407 62 S435 78 455 66 S487 61 506 71 S538 43 562 52 S581 46 600 35" fill="none" stroke="var(--pp-emerald)" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+      <path d="M0 113 C27 105 30 93 52 101 S80 85 105 96 S132 78 154 83 S183 101 205 85 S236 75 256 82 S278 60 304 70 S336 89 357 76 S382 49 407 62 S435 78 455 66 S487 61 506 71 S538 43 562 52 S581 46 600 35 L600 160 L0 160Z" fill="url(#chartFill)" opacity=".22" />
+      <defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--pp-emerald)" /><stop offset="1" stopColor="var(--pp-emerald)" stopOpacity="0" /></linearGradient></defs>
+    </svg>
+    <div className="mt-1 flex justify-between font-mono text-[8px] text-[var(--pp-muted)]/65"><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span></div>
+    <p className="mt-2 text-[9px] text-[var(--pp-warning)]">Illustrative chart graphic · no market feed · selection does not alter data</p>
+  </div>;
+}
 
 export default function Home() {
-  return (
-    <div className="page-enter mx-auto max-w-[1440px] px-5 pb-16 pt-8 sm:px-8 sm:pt-10 lg:px-12 lg:pt-12">
-      <section id="overview" className="scroll-mt-24">
-        <div className="mb-8 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-          <span className="size-1.5 rounded-full bg-emerald-300" />
-          PipPilotAi workspace
-          <span className="text-slate-700">/</span>
-          Product foundation
+  const [timeframe, setTimeframe] = useState('D1');
+  const currentDate = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date());
+  return <div className="page-enter space-y-6 sm:space-y-7">
+    <section className="relative overflow-hidden rounded-[22px] border border-white/[.075] bg-[linear-gradient(120deg,var(--pp-color-surface-raised),var(--pp-surface)_54%,var(--pp-charcoal))] p-5 sm:p-7 lg:p-8">
+      <div className="pointer-events-none absolute -right-20 -top-28 size-72 rounded-full border border-[var(--pp-emerald)]/[.12]" /><div className="pointer-events-none absolute -right-7 -top-14 size-44 rounded-full border border-[var(--pp-blue)]/[.09]" />
+      <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-end">
+        <div className="max-w-[720px]">
+          <div className="mb-4 flex flex-wrap items-center gap-2"><span className="flex min-h-7 items-center gap-1.5 rounded-full border border-[var(--pp-emerald)]/20 bg-[var(--pp-emerald)]/[.09] px-2.5 text-[9px] font-bold uppercase tracking-[.1em] text-[var(--pp-emerald)]"><Compass className="size-3" />Your trading workspace</span><DemoTag /></div>
+          <h1 className="ambient-type text-[clamp(1.9rem,5vw,3.1rem)] font-semibold leading-[1.07] tracking-[-.06em]"><span className="block text-[13px] font-medium tracking-normal text-[var(--pp-muted)]">Welcome, <span data-testid="text-demo-display-name" className="text-[var(--pp-text)]">Demo Trader</span> <span className="text-[10px] tracking-normal text-[var(--pp-muted)]">· display-name placeholder</span></span>Good context.<br className="sm:hidden" /> <span className="text-[var(--pp-emerald)]">Your call.</span></h1>
+          <p className="mt-3 max-w-[540px] text-[12px] leading-[1.7] text-[var(--pp-muted)] sm:text-[13px]">A clear view of your workspace, designed to keep decisions human-led. Every figure below is sample content—not live market information or advice.</p>
+          <p data-testid="text-current-date" className="mt-3 text-[10px] font-medium text-[var(--pp-muted)]">Today · {currentDate}</p>
         </div>
+        <div className="flex flex-col items-start gap-2 md:items-end"><StatusBadge>Demo · awaiting configuration</StatusBadge><span className="text-[9px] text-[var(--pp-muted)]">Sample system status · MT5 not connected</span></div>
+      </div>
+    </section>
 
-        <div className="grid gap-9 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] xl:items-end">
-          <div className="max-w-[760px]">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1.5 text-[10px] font-medium text-slate-400">
-              <CircleDot className="size-3 text-emerald-300" aria-hidden="true" />
-              Independent · human-led by design
-            </div>
-            <h1 className="ambient-type max-w-[760px] text-[clamp(2.5rem,6vw,5.25rem)] font-semibold leading-[1.02] tracking-[-0.065em] text-slate-50">
-              Clarity for the
-              <br className="hidden sm:block" /> decisions <span className="text-emerald-300">that matter.</span>
-            </h1>
-            <p className="mt-5 max-w-[590px] text-[15px] leading-[1.8] text-slate-400 sm:text-[16px]">
-              PipPilotAi is being built as a trading intelligence workspace: clear context, explainable analysis, and your approval at every step. No opaque autopilot.
-            </p>
-            <a
-              href="#capabilities"
-              className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-400 px-5 text-[13px] font-bold text-[#10221b] transition-colors hover:bg-emerald-300"
-              data-testid="link-explore-capabilities"
-            >
-              Explore the product direction
-              <ArrowRight className="size-4" aria-hidden="true" />
-            </a>
-          </div>
+    <section aria-label="Illustrative account overview" className="space-y-3">
+      <SectionHeading eyebrow="Demo account snapshot" title="Account overview" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <StatCard label="Account Balance" value="$10,000.00" note="DEMO SAMPLE · fictional value" tone="blue" />
+      <StatCard label="Account Equity" value="$10,125.00" note="DEMO SAMPLE · fictional value" tone="blue" />
+      <StatCard label="Today's Profit/Loss" value="+$125.00" note="DEMO SAMPLE · illustrative positive P/L" tone="green" />
+      </div>
+    </section>
 
-          <div className="relative overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#141d26] p-5 sm:p-6">
-            <div className="pointer-events-none absolute -right-12 -top-16 size-48 rounded-full border border-emerald-300/[0.09]" />
-            <div className="pointer-events-none absolute -right-5 -top-9 size-32 rounded-full border border-emerald-300/[0.12]" />
-            <div className="relative flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-slate-500">Current setup</p>
-                <h2 className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-slate-100">A clean starting point</h2>
-              </div>
-              <StatusPill />
-            </div>
-            <p className="relative mt-3 max-w-[390px] text-[12px] leading-[1.7] text-slate-400">
-              This is the product foundation only. No accounts, trading connections, live data, or analysis are active.
-            </p>
-            <div className="relative mt-5 flex items-center gap-3 border-t border-white/[0.07] pt-4">
-              <div className="grid size-9 place-items-center rounded-xl bg-emerald-300/[0.09] text-emerald-300">
-                <ShieldAlert className="size-[17px]" strokeWidth={1.7} aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold text-slate-200">Nothing can place a trade</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Trading actions are not configured.</p>
-              </div>
-              <ArrowDownRight className="ml-auto size-4 text-slate-600" aria-hidden="true" />
-            </div>
-          </div>
+    <section className="grid gap-4 md:grid-cols-2">
+      <Panel testId="panel-trading-status">
+        <div className="flex items-start justify-between gap-2"><SectionHeading eyebrow="Trading status · demo state" title="Trading status" /><DemoTag /></div>
+        <div className="mt-4 rounded-xl border border-[var(--pp-warning)]/15 bg-[var(--pp-warning)]/[.045] p-3.5">
+          <div className="flex items-center gap-2"><ServerOff className="size-4 text-[var(--pp-warning)]" /><span className="text-[11px] font-semibold">Trading engine Offline</span><span data-testid="status-trading-engine" className="ml-auto rounded-md bg-[var(--pp-warning)]/10 px-2 py-1 text-[8px] font-bold uppercase text-[var(--pp-warning)]">Demo state</span></div>
+          <p className="mt-1.5 text-[9px] text-[var(--pp-muted)]">No trading capability or service is connected.</p>
         </div>
-      </section>
-
-      <section className="mt-12 rounded-[20px] border border-amber-300/[0.13] bg-amber-300/[0.035] px-4 py-4 sm:flex sm:items-center sm:gap-4 sm:px-5" aria-label="Setup notice">
-        <div className="mb-3 grid size-9 shrink-0 place-items-center rounded-xl border border-amber-300/[0.13] bg-amber-300/[0.06] text-amber-200 sm:mb-0">
-          <CircleDot className="size-4" aria-hidden="true" />
+        <div className="mt-3 divide-y divide-white/[.06]">
+          {[['MT5', 'Not connected', 'status-mt5'], ['Active positions', '0', 'status-active-positions'], ['Pending signals', '0', 'status-pending-signals']].map(([label, value, id]) => <div key={label} className="flex min-h-11 items-center justify-between gap-3 py-2"><span className="text-[10px] text-[var(--pp-muted)]">{label}</span><span data-testid={id} className="text-[10px] font-semibold text-[var(--pp-text)]">{value} <span className="text-[8px] font-medium text-[var(--pp-warning)]">DEMO</span></span></div>)}
         </div>
-        <div className="min-w-0">
-          <p className="text-[12px] font-semibold text-amber-100">Workspace connections are not configured</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-            Authentication, services, MT5, market data, calendar, billing, and administration are planned—not connected.
-          </p>
-        </div>
-        <span className="mt-3 shrink-0 text-[9px] font-bold uppercase tracking-[0.17em] text-amber-200/70 sm:ml-auto sm:mt-0">No live account data</span>
-      </section>
+        <p className="mt-2 text-[9px] leading-relaxed text-[var(--pp-muted)]">The sample signal cards below are fictional examples only; they are not active or pending.</p>
+      </Panel>
 
-      <section id="capabilities" className="scroll-mt-24 pt-16 sm:pt-20">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300">The direction</p>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.05em] text-slate-100 sm:text-[31px]">Built to inform. Never to assume.</h2>
-          </div>
-          <p className="max-w-[340px] text-[12px] leading-[1.7] text-slate-500">
-            These are planned capabilities, not available tools. Each should make the trader’s judgment stronger.
-          </p>
+      <Panel testId="panel-ai-engine-status">
+        <div className="flex items-start justify-between gap-2"><SectionHeading eyebrow="System readiness · demo" title="AI engine status" /><DemoTag /></div>
+        <div className="mt-3 divide-y divide-white/[.06]">
+          {engineStatuses.map(([label, id]) => <div key={id} data-testid={id} className="flex min-h-[57px] items-center justify-between gap-3 py-2.5"><div className="min-w-0"><p className="text-[10px] font-semibold text-[var(--pp-text)]">{label}</p><p className="mt-1 text-[8px] text-[var(--pp-muted)]">Demo system state</p></div><span className="shrink-0 text-right text-[9px] font-semibold text-[var(--pp-warning)]">Awaiting configuration</span></div>)}
         </div>
+        <p className="mt-2 text-[9px] text-[var(--pp-muted)]">No engine is running or producing analysis.</p>
+      </Panel>
+    </section>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {plannedCapabilities.map(({ title, detail, icon: Icon, tag }, index) => (
-            <article key={title} className="group relative min-h-[192px] overflow-hidden rounded-[18px] border border-white/[0.075] bg-[#121a23] p-5 transition-colors hover:border-emerald-300/20" data-testid={`card-capability-${index}`}>
-              <div className="flex items-center justify-between">
-                <span className="grid size-9 place-items-center rounded-xl border border-white/[0.07] bg-white/[0.025] text-emerald-300">
-                  <Icon className="size-[17px]" strokeWidth={1.65} aria-hidden="true" />
-                </span>
-                <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600">Planned</span>
-              </div>
-              <h3 className="mt-5 text-[14px] font-semibold tracking-[-0.02em] text-slate-200">{title}</h3>
-              <p className="mt-2 text-[11px] leading-[1.7] text-slate-500">{detail}</p>
-              <div className="mt-4 flex items-center gap-1.5 text-[9px] font-medium text-slate-600">
-                <span className="size-1 rounded-full bg-slate-600" />
-                {tag} · not configured
-              </div>
-            </article>
-          ))}
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,.85fr)]">
+      <Panel>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><SectionHeading eyebrow="Market overview · demo" title="EUR / USD context" /><p className="mt-2 text-[10px] text-[var(--pp-muted)]">All chart marks and quote values below are fictional samples.</p></div>
+          <DemoTag />
         </div>
-      </section>
-
-      <section className="mt-14 grid gap-8 rounded-[22px] border border-white/[0.07] bg-[#121a23] p-5 sm:p-7 lg:grid-cols-[.8fr_1.2fr] lg:gap-12" aria-labelledby="setup-title">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Setup map</p>
-          <h2 id="setup-title" className="mt-2 text-[24px] font-semibold tracking-[-0.05em] text-slate-100">What comes next</h2>
-          <p className="mt-3 max-w-[380px] text-[12px] leading-[1.75] text-slate-400">
-            The essentials are intentionally visible. None are live in this first product foundation.
-          </p>
-          <div className="mt-5 inline-flex items-center gap-2 rounded-lg border border-white/[0.07] px-3 py-2 text-[10px] text-slate-400">
-            <CircleDot className="size-3 text-orange-300" aria-hidden="true" />
-            All systems are still ahead
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--pp-color-surface-raised)] px-3 py-2.5">
+          <div><p className="font-mono text-[18px] font-semibold tracking-tight">1.08426</p><p className="mt-0.5 text-[9px] text-[var(--pp-muted)]">Illustrative quote only</p></div>
+          <div className="flex gap-1 rounded-lg bg-[var(--pp-charcoal)] p-1" role="group" aria-label="Choose timeframe">
+            {times.map((item) => <DashboardButton key={item} onClick={() => setTimeframe(item)} aria-pressed={timeframe === item} data-testid={`button-timeframe-${item.toLowerCase()}`} active={timeframe === item}>{item}</DashboardButton>)}
           </div>
         </div>
-        <div className="divide-y divide-white/[0.06]">
-          {setupItems.map(({ title, note, icon: Icon }) => (
-            <div key={title} className="flex min-h-[66px] items-center gap-3 py-3 first:pt-0 last:pb-0">
-              <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/[0.035] text-slate-400">
-                <Icon className="size-4" strokeWidth={1.7} aria-hidden="true" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-slate-200">{title}</p>
-                <p className="mt-1 text-[10px] text-slate-500">{note}</p>
-              </div>
-              <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-[9px] font-medium text-slate-500">
-                <span className="size-1.5 rounded-full bg-orange-300/70" />
-                Planned
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
+        <DemoChart timeframe={timeframe} />
+      </Panel>
 
-      <section id="principles" className="scroll-mt-24 pb-4 pt-16 sm:pt-20">
-        <div className="grid gap-6 md:grid-cols-[.8fr_1.2fr] md:items-center">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300">The operating principle</p>
-            <h2 className="ambient-type mt-3 max-w-[420px] text-[28px] font-semibold leading-[1.12] tracking-[-0.055em] text-slate-100 sm:text-[35px]">
-              The pilot helps you see. You stay in control.
-            </h2>
-          </div>
-          <div className="border-l border-emerald-300/25 pl-5 sm:pl-7">
-            <p className="max-w-[560px] text-[13px] leading-[1.85] text-slate-400">
-              PipPilotAi is intended to make its context and reasoning understandable before any decision is yours to make. Human review is a product principle, not a setting hidden in a menu.
-            </p>
-            <p className="mt-3 text-[10px] font-medium text-slate-600">Planned direction · no automated trading is available</p>
-          </div>
+      <Panel>
+        <div className="flex items-start justify-between gap-2"><SectionHeading eyebrow="Structured context · sample data" title="Recent signals preview" /><DemoTag /></div>
+        <p data-testid="text-signal-disclaimer" className="mb-3 mt-2 rounded-lg border border-[var(--pp-warning)]/20 bg-[var(--pp-warning)]/[.07] p-2.5 text-[10px] font-semibold leading-relaxed text-[var(--pp-warning)]">FICTIONAL SAMPLE DATA ONLY — These examples are not recommendations, instructions, active signals, or connected market data.</p>
+        <div className="space-y-2.5">
+          <SignalCard asset="XAUUSD" direction="SELL" timeframe="H1" entry="2,180.00" stopLoss="2,196.00" takeProfit="2,148.00" status="Sample only" />
+          <SignalCard asset="EURUSD" direction="BUY" timeframe="M15" entry="1.08200" stopLoss="1.07850" takeProfit="1.08900" status="Sample only" />
+          <SignalCard asset="US30" direction="BUY" timeframe="H4" entry="38,500.0" stopLoss="38,220.0" takeProfit="39,060.0" status="Sample only" />
         </div>
-      </section>
+        <Link href="/trading" className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-[10px] font-bold text-[var(--pp-emerald)] hover:bg-white/[.035]">Explore trading workspace <ArrowRight className="size-3.5" /></Link>
+      </Panel>
+    </section>
 
-      <footer className="mt-12 flex flex-col gap-3 border-t border-white/[0.06] pt-5 text-[10px] text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-        <span>PipPilotAi · independent trading intelligence workspace</span>
-        <span className="flex items-center gap-2">
-          <Check className="size-3 text-emerald-400/70" aria-hidden="true" />
-          Foundation only. No integrations or financial data.
-        </span>
-      </footer>
-    </div>
-  );
+    <Panel testId="panel-market-watch">
+      <div className="flex flex-wrap items-center justify-between gap-2"><SectionHeading eyebrow="Market watch" title="Six-market preview" /><DemoTag>DEMO DATA</DemoTag></div>
+      <p className="mt-2 text-[9px] text-[var(--pp-muted)]">Every price below is a fictional placeholder, not a live quote.</p>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        {marketWatch.map(([asset, price]) => <div key={asset} data-testid={`market-watch-${asset.toLowerCase()}`} className="rounded-xl border border-white/[.06] bg-[var(--pp-color-surface-raised)] p-3"><p className="ambient-type text-[10px] font-bold tracking-wide text-[var(--pp-text)]">{asset}</p><p className="mt-2 font-mono text-[12px] font-semibold text-[var(--pp-blue)]">{price}</p><p className="mt-1 text-[8px] text-[var(--pp-muted)]">DEMO PLACEHOLDER</p></div>)}
+      </div>
+    </Panel>
+
+    <section className="grid gap-4 md:grid-cols-2">
+      <Panel>
+        <div className="flex items-center justify-between gap-2"><SectionHeading eyebrow="Upcoming · sample content" title="Calendar context" /><CalendarDays className="size-4 text-[var(--pp-blue)]" /></div>
+        <div className="mt-4 space-y-3">
+          {[['10:30', 'Central bank remarks', 'Sample event · medium'], ['14:00', 'Inflation report', 'Sample event · high']].map(([time, event, note]) => <div key={time} className="flex items-center gap-3 rounded-xl bg-[var(--pp-color-surface-raised)] p-3"><span className="min-w-[42px] font-mono text-[10px] text-[var(--pp-blue)]">{time}</span><div className="min-w-0"><p className="text-[11px] font-semibold">{event}</p><p className="mt-1 text-[9px] text-[var(--pp-muted)]">{note} · not a real calendar</p></div><ChevronRight className="ml-auto size-4 text-[var(--pp-muted)]/60" /></div>)}
+        </div><p className="mt-3 text-[9px] text-[var(--pp-warning)]">Illustrative event names and times only. No calendar service connected.</p>
+      </Panel>
+      <Panel>
+        <div className="flex items-center justify-between"><SectionHeading eyebrow="Workspace readiness" title="A quiet starting point" /><WifiOff className="size-4 text-[var(--pp-warning)]" /></div>
+        <div className="mt-4 space-y-3">
+          {[['Analysis engines', 'Awaiting configuration'], ['MetaTrader 5', 'Not connected'], ['Market & calendar feeds', 'Inactive']].map(([label, status]) => <div key={label} className="flex items-center justify-between gap-3 border-b border-white/[.06] pb-3 last:border-0 last:pb-0"><span className="text-[10px] text-[var(--pp-muted)]">{label}</span><span className="text-right text-[9px] font-semibold text-[var(--pp-warning)]">{status} · demo</span></div>)}
+        </div>
+        <Link href="/connections" className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-[10px] font-bold text-[var(--pp-emerald)] hover:bg-white/[.035]">Review connection status <ArrowRight className="size-3.5" /></Link>
+      </Panel>
+    </section>
+
+    <section className="flex flex-col gap-3 rounded-2xl border border-[var(--pp-blue)]/15 bg-[var(--pp-blue)]/[.045] p-4 sm:flex-row sm:items-center">
+      <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--pp-blue)]/[.1] text-[var(--pp-blue)]"><ShieldCheck className="size-4" /></div>
+      <div className="min-w-0"><p className="text-[11px] font-semibold">Designed for you to stay in control</p><p className="mt-1 text-[10px] leading-relaxed text-[var(--pp-muted)]">No trade execution, recommendations, account connections, or live data are available in this frontend demo.</p></div>
+      <Link href="/help" className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-2 text-[10px] font-bold text-[var(--pp-blue)] hover:bg-white/[.04]"><CircleHelp className="size-3.5" />Demo guide <ChevronRight className="size-3" /></Link>
+    </section>
+
+    <footer className="flex flex-col gap-2 border-t border-white/[.07] pt-4 text-[9px] text-[var(--pp-muted)] sm:flex-row sm:items-center sm:justify-between"><span>PipPilotAi · product preview · all displayed content is illustrative</span><span className="flex items-center gap-1"><Clock3 className="size-3" />Local interface state only <Sparkles className="ml-2 size-3" /></span></footer>
+  </div>;
 }

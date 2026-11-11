@@ -1,10 +1,15 @@
 :root {
-  --pp-color-canvas: #0f151d;
-  --pp-color-surface: #121a23;
-  --pp-color-surface-raised: #141d26;
-  --pp-color-emerald: #6ee7b7;
-  --pp-color-electric-blue: #38bdf8;
-  --pp-color-purple-glow: rgb(152 117 184 / 17%);
-  --pp-color-warning: #fdba74;
-  --pp-color-danger: #f87171;
+  --pp-emerald: #16A36A;
+  --pp-blue: #168BFF;
+  --pp-purple: #9560E8;
+  --pp-purple-glow: rgb(149 96 232 / 18%);
+  --pp-charcoal: #101B20;
+  --pp-surface: #152B30;
+  --pp-text: #E8F2EE;
+  --pp-muted: #A9BEB5;
+  --pp-warning: #E69A36;
+  --pp-error: #E05252;
+  --pp-color-canvas: var(--pp-charcoal);
+  --pp-color-surface: var(--pp-surface);
+  --pp-color-surface-raised: var(--pp-surface);
 }

@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import Home from '@/pages/home';
+import { WorkspacePlaceholder } from '@/pages/workspace-placeholder';
 import { WorkspaceLayout } from '@/layouts/workspace-layout';
 import {
   Route,
@@ -15,24 +16,25 @@ import {
 
 const queryClient = new QueryClient();
 
-function HomePage() {
-  return (
-    <WorkspaceLayout>
-      <Home />
-    </WorkspaceLayout>
-  );
-}
-
 function Router() {
   return (
-    // Keep a shared shell (sidebar, navbar) outside the boundary so it
-    // survives a page crash.
-    <RoutedErrorBoundary>
-      <Switch>
-        <Route path="/" component={HomePage} />
-        <Route component={NotFound} />
-      </Switch>
-    </RoutedErrorBoundary>
+    <WorkspaceLayout>
+      <RoutedErrorBoundary>
+        <Switch>
+          <Route path="/" component={Home} />
+          <Route path="/trading" component={() => <WorkspacePlaceholder page="trading" />} />
+          <Route path="/strategies" component={() => <WorkspacePlaceholder page="strategies" />} />
+          <Route path="/news" component={() => <WorkspacePlaceholder page="news" />} />
+          <Route path="/risk" component={() => <WorkspacePlaceholder page="risk" />} />
+          <Route path="/connections" component={() => <WorkspacePlaceholder page="connections" />} />
+          <Route path="/history" component={() => <WorkspacePlaceholder page="history" />} />
+          <Route path="/backtesting" component={() => <WorkspacePlaceholder page="backtesting" />} />
+          <Route path="/settings" component={() => <WorkspacePlaceholder page="settings" />} />
+          <Route path="/help" component={() => <WorkspacePlaceholder page="help" />} />
+          <Route component={NotFound} />
+        </Switch>
+      </RoutedErrorBoundary>
+    </WorkspaceLayout>
   );
 }
 
