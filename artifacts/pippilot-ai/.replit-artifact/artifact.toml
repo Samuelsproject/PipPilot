@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "PipPilotAi"
+description = "A mobile-first foundation for PipPilotAi, an AI-assisted trading intelligence product. This initial stage establishes the responsive React application structure and brand without trading functionality or external integrations."
+version = "1.0.0"
+id = "artifacts/pippilot-ai"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19339
+
+[services.development]
+run = "pnpm --filter @workspace/pippilot-ai run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pippilot-ai", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pippilot-ai/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19339"
+BASE_PATH = "/"

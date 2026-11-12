@@ -1,0 +1,1 @@
+- [PipPilotAi scope](pippilot-scope.md) — Keep this product independent from ApexGold and avoid integrations or trading features until requested.

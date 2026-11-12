@@ -1,0 +1,15 @@
+:root {
+  --pp-emerald: #16A36A;
+  --pp-blue: #168BFF;
+  --pp-purple: #9560E8;
+  --pp-purple-glow: rgb(149 96 232 / 18%);
+  --pp-charcoal: #101B20;
+  --pp-surface: #152B30;
+  --pp-text: #E8F2EE;
+  --pp-muted: #A9BEB5;
+  --pp-warning: #E69A36;
+  --pp-error: #E05252;
+  --pp-color-canvas: var(--pp-charcoal);
+  --pp-color-surface: var(--pp-surface);
+  --pp-color-surface-raised: var(--pp-surface);
+}
