@@ -1,0 +1,6 @@
+{
+  "name": "PipPilotAi",
+  "description": "AI-assisted trading intelligence and semi-automated trading platform public landing page and interactive preview.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

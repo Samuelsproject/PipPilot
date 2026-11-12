@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --brand-emerald: #16A36A;
+    --brand-blue: #168BFF;
+    --brand-purple: #9560E8;
+    --brand-charcoal: #101B20;
+    --brand-surface: #152B30;
+    --brand-surface-card: #152B30;
+    --brand-surface-elevated: #1B363C;
+    --brand-text: #E8F2EE;
+    --brand-muted: #A9BEB5;
+    --brand-warning: #E69A36;
+    --brand-error: #E05252;
+  }
+
+  body {
+    background-color: #101B20;
+    color: #E8F2EE;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Subtle purple ambient glow effects specified in visual identity */
+.purple-glow-text {
+  text-shadow: 0 0 20px rgba(149, 96, 232, 0.4), 0 0 40px rgba(149, 96, 232, 0.2);
+}
+
+.purple-glow-box {
+  box-shadow: 0 0 25px -5px rgba(149, 96, 232, 0.25);
+}
+
+.purple-glow-border {
+  border-color: rgba(149, 96, 232, 0.35);
+  box-shadow: 0 0 15px -3px rgba(149, 96, 232, 0.2);
+}
+
+.emerald-glow {
+  box-shadow: 0 0 20px -3px rgba(22, 163, 106, 0.35);
+}
+
+.blue-glow {
+  box-shadow: 0 0 20px -3px rgba(22, 139, 255, 0.35);
+}
+
+/* Custom subtle grid background for financial intelligence vibe */
+.bg-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(169, 190, 181, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(169, 190, 181, 0.04) 1px, transparent 1px);
+}
+
+/* Custom smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #101B20;
+}
+::-webkit-scrollbar-thumb {
+  background: #1D3A42;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #16A36A;
+}
