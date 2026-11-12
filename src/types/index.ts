@@ -1,5 +1,21 @@
-export type NavigationRoute = '/' | '/app' | '/register';
+export type NavigationRoute = 
+  | '/' 
+  | '/app' 
+  | '/register' 
+  | '/login' 
+  | '/forgot-password' 
+  | '/reset-password' 
+  | '/verify-email';
 
+export type MembershipApprovalStatus = 'none' | 'pending_approval' | 'active';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+  membershipStatus: MembershipApprovalStatus;
+  createdAt: string;
+}
 export interface EconomicEvent {
   id: string;
   name: string;

@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Compass, Activity, ArrowRight, ShieldCheck, ChevronRight } from 'lucide-react';
+import { 
+  Menu, 
+  X, 
+  Compass, 
+  Activity, 
+  ArrowRight, 
+  ShieldCheck, 
+  ChevronRight, 
+  LogIn, 
+  LogOut, 
+  User 
+} from 'lucide-react';
 import { NavigationRoute } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
   currentRoute: NavigationRoute;
@@ -8,6 +20,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate }) => {
+  const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -29,6 +42,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate }) => {
         el.scrollIntoView({ behavior: 'smooth' });
       }
     }
+  };
+
+  const handleSignOut = async () => {
+    setMobileMenuOpen(false);
+    await logout();
+    onNavigate('/');
   };
 
   return (
@@ -53,7 +72,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate }) => {
           >
             <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-[#16A36A] via-[#168BFF] to-[#9560E8] p-[1.5px] transition-transform duration-300 group-hover:scale-105">
               <div className="w-full h-full bg-[#101B20] rounded-[10px] flex items-center justify-center">
-                <Compass className="w-5 h-5 text-[#16A36A] transition-colors group-hover:text-[#168BFF]" />
+                <Compass className="w-5 h-5 text-[#16A36A]" />
               </div>
             </div>
             <div className="flex flex-col">
@@ -67,7 +86,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate }) => {
           </button>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-8">
+          <nav className="hidden md:flex items-center gap-7">
             <button
               onClick={() => handleLinkClick('#features')}
               className="text-sm font-medium text-[#A9BEB5] hover:text-[#E8F2EE] transition-colors"
@@ -99,27 +118,63 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate }) => {
             </button>
           </nav>
 
-          {/* Action Button: Get Access */}
+          {/* Action CTAs & Auth Controls */}
           <div className="hidden md:flex items-center gap-3">
-            <button
-              onClick={() => onNavigate('/register')}
-              className="relative inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-[#E8F2EE] bg-[#16A36A] rounded-xl hover:bg-[#148f5d] transition-all duration-200 shadow-md shadow-[#16A36A]/25 hover:shadow-lg hover:shadow-[#16A36A]/35 hover:-translate-y-0.5 active:translate-y-0 group"
-            >
-              <span className="relative z-10 flex items-center gap-1.5">
-                Get Access
-                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-              </span>
-            </button>
+            {user ? (
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#152B30] border border-[#1A363E] text-xs font-mono text-[#E8F2EE]">
+                  <User className="w-3.5 h-3.5 text-[#16A36A]" />
+                  <span className="max-w-[130px] truncate">{user.email}</span>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#152B30] hover:bg-[#1B363C] text-[#A9BEB5] hover:text-[#E05252] text-xs font-semibold border border-[#1A363E] transition-colors flex items-center gap-1.5"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => onNavigate('/login')}
+                  className="text-xs font-bold text-[#E8F2EE] hover:text-[#168BFF] transition-colors px-3 py-2 flex items-center gap-1.5"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-[#168BFF]" />
+                  <span>Sign In</span>
+                </button>
+                <button
+                  onClick={() => onNavigate('/register')}
+                  className="relative inline-flex items-center justify-center px-5 py-2.5 text-xs font-bold text-[#E8F2EE] bg-[#16A36A] rounded-xl hover:bg-[#148f5d] transition-all duration-200 shadow-md shadow-[#16A36A]/25 hover:shadow-lg hover:shadow-[#16A36A]/35 hover:-translate-y-0.5 active:translate-y-0 group"
+                >
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    Get Access
+                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex md:hidden items-center gap-2">
-            <button
-              onClick={() => onNavigate('/register')}
-              className="px-3 py-1.5 text-xs font-bold text-[#E8F2EE] bg-[#16A36A] rounded-lg shadow-sm shadow-[#16A36A]/20"
-            >
-              Get Access
-            </button>
+            {!user ? (
+              <button
+                onClick={() => onNavigate('/login')}
+                className="px-2.5 py-1.5 text-xs font-semibold text-[#168BFF] bg-[#168BFF]/10 rounded-lg border border-[#168BFF]/30"
+              >
+                Sign In
+              </button>
+            ) : (
+              <button
+                onClick={handleSignOut}
+                className="p-1.5 text-xs text-[#E05252] bg-[#E05252]/10 rounded-lg border border-[#E05252]/30"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-xl bg-[#152B30] text-[#E8F2EE] border border-[#1A363E] hover:bg-[#1A363E] transition-colors focus:outline-none"
@@ -135,6 +190,22 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate }) => {
       {/* Mobile Drawer / Dropdown */}
       {mobileMenuOpen && (
         <div className="md:hidden border-b border-[#152B30] bg-[#152B30]/98 backdrop-blur-xl px-4 pt-3 pb-6 space-y-3 animate-in slide-in-from-top-2 duration-200">
+          {user && (
+            <div className="p-3 rounded-xl bg-[#101B20] border border-[#1A363E] flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <User className="w-4 h-4 text-[#16A36A] shrink-0" />
+                <span className="text-xs font-mono text-[#E8F2EE] truncate">{user.email}</span>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="text-xs text-[#E05252] font-semibold flex items-center gap-1 shrink-0 ml-2"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-col space-y-1">
             <button
               onClick={() => handleLinkClick('#features')}
@@ -172,18 +243,43 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onNavigate }) => {
             </button>
           </div>
 
-          <div className="pt-2 border-t border-[#101B20]/80">
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                onNavigate('/register');
-              }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-[#16A36A] hover:bg-[#148f5d] text-[#E8F2EE] font-bold text-sm shadow-md shadow-[#16A36A]/30 active:scale-[0.99] transition-transform"
-            >
-              <span>Get Access</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-            <p className="text-center text-[11px] text-[#A9BEB5] mt-2 flex items-center justify-center gap-1">
+          <div className="pt-2 border-t border-[#101B20]/80 space-y-2">
+            {!user ? (
+              <>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onNavigate('/register');
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-[#16A36A] hover:bg-[#148f5d] text-[#E8F2EE] font-bold text-sm shadow-md shadow-[#16A36A]/30 active:scale-[0.99] transition-transform"
+                >
+                  <span>Get Access / Register</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onNavigate('/login');
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#101B20] text-[#E8F2EE] font-semibold text-xs border border-[#1A363E]"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-[#168BFF]" />
+                  <span>Existing Member? Sign In</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onNavigate('/app');
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-[#168BFF] text-[#E8F2EE] font-bold text-sm"
+              >
+                <span>Go to Workspace</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+            <p className="text-center text-[11px] text-[#A9BEB5] pt-1 flex items-center justify-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-[#16A36A]" />
               Membership subject to administrator approval
             </p>

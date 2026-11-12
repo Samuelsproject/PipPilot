@@ -16,15 +16,22 @@ import {
   Clock, 
   Zap, 
   Check, 
-  AlertCircle 
+  AlertCircle,
+  User,
+  LogOut,
+  LogIn,
+  KeyRound
 } from 'lucide-react';
 import { NavigationRoute } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface DashboardPreviewPageProps {
   onNavigate: (route: NavigationRoute) => void;
 }
 
 export const DashboardPreviewPage: React.FC<DashboardPreviewPageProps> = ({ onNavigate }) => {
+  const { user, emailVerified, membershipStatus, logout } = useAuth();
+
   const [selectedAsset, setSelectedAsset] = useState<'XAU/USD' | 'EUR/USD' | 'GBP/USD' | 'US30'>('XAU/USD');
   const [timeframe, setTimeframe] = useState<'M5' | 'M15' | 'H1' | 'H4' | 'D1'>('M15');
   const [approvalStatus, setApprovalStatus] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'MT5_VALIDATED'>('PENDING');
@@ -45,24 +52,70 @@ export const DashboardPreviewPage: React.FC<DashboardPreviewPageProps> = ({ onNa
     'US30': { name: 'Dow Jones Index', price: '43,890.10', change: '+0.45%', bias: 'Bullish Expansion' }
   }[selectedAsset];
 
+  const handleSignOut = async () => {
+    await logout();
+    onNavigate('/');
+  };
+
   return (
     <div className="min-h-screen bg-[#101B20] text-[#E8F2EE] flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
-      {/* Top Banner Notice: Stage Disclaimer */}
+      {/* Top Banner Notice: Authentication & Membership Separation Banner */}
       <div className="bg-[#152B30] border-b border-[#1A363E] px-4 py-2.5">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2 text-[#E69A36]">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>
-              <strong>Preview Mode:</strong> Public demonstration preview. Dashboard is not yet protected by authentication. Backend execution and real trading connections are intentionally inactive in Stage 3.
-            </span>
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2 text-xs">
+          {user ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="font-mono text-[#E8F2EE] font-semibold flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-[#16A36A]" />
+                {user.email}
+              </span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                emailVerified ? 'bg-[#16A36A]/20 text-[#16A36A]' : 'bg-[#E69A36]/20 text-[#E69A36]'
+              }`}>
+                {emailVerified ? 'Email Verified ✓' : 'Email Unverified ⚠️'}
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#9560E8]/20 text-[#E8F2EE] border border-[#9560E8]/30">
+                Membership: Pending Admin Approval (Step 3)
+              </span>
+              <span className="text-[11px] text-[#A9BEB5] hidden lg:inline">
+                • Verified email confirms identity; live trading execution requires cohort admin approval.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-[#E69A36]">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>
+                <strong>Preview Mode:</strong> Demonstrating terminal interface. Sign in with Supabase to test persistent authenticated session state.
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 self-end md:self-auto shrink-0">
+            {user ? (
+              <button
+                onClick={handleSignOut}
+                className="text-xs font-bold text-[#E05252] hover:underline flex items-center gap-1"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onNavigate('/login')}
+                className="text-xs font-bold text-[#168BFF] hover:underline flex items-center gap-1"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
+            <span className="text-[#1A363E]">|</span>
+            <button
+              onClick={() => onNavigate('/')}
+              className="flex items-center gap-1.5 text-xs font-bold text-[#16A36A] hover:text-[#E8F2EE] transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Public Homepage</span>
+            </button>
           </div>
-          <button
-            onClick={() => onNavigate('/')}
-            className="flex items-center gap-1.5 text-xs font-bold text-[#16A36A] hover:text-[#E8F2EE] transition-colors shrink-0"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Return to Public Homepage</span>
-          </button>
         </div>
       </div>
 
@@ -127,13 +180,27 @@ export const DashboardPreviewPage: React.FC<DashboardPreviewPageProps> = ({ onNa
             ))}
           </div>
 
-          {/* Get Access CTA */}
-          <button
-            onClick={() => onNavigate('/register')}
-            className="px-3.5 py-1.5 rounded-xl bg-[#16A36A] hover:bg-[#148f5d] text-[#E8F2EE] text-xs font-bold shadow-sm shadow-[#16A36A]/20 transition-all"
-          >
-            Request Access
-          </button>
+          {/* User Auth Action or Request Access */}
+          {user ? (
+            <div className="flex items-center gap-2">
+              <div className="px-3 py-1.5 rounded-xl bg-[#101B20] border border-[#1A363E] text-xs font-mono text-[#16A36A]">
+                Authenticated
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="px-3 py-1.5 rounded-xl bg-[#E05252]/10 hover:bg-[#E05252]/20 border border-[#E05252]/30 text-[#E05252] text-xs font-bold transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => onNavigate('/register')}
+              className="px-3.5 py-1.5 rounded-xl bg-[#16A36A] hover:bg-[#148f5d] text-[#E8F2EE] text-xs font-bold shadow-sm shadow-[#16A36A]/20 transition-all"
+            >
+              Register / Sign In
+            </button>
+          )}
         </div>
       </header>
 
