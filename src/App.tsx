@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { NavigationRoute } from './types';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { NavigationRoute, WorkspaceRoute } from './types';
+import { AuthProvider } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { Features } from './components/Features';
@@ -23,28 +23,56 @@ import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { SupabaseConfigBanner } from './components/SupabaseConfigBanner';
 import { ContactModal, PrivacyModal, TermsModal } from './components/Modals';
 
+const WORKSPACE_ROUTES: WorkspaceRoute[] = [
+  '/app',
+  '/app/trading',
+  '/app/strategies',
+  '/app/news',
+  '/app/risk',
+  '/app/mt5',
+  '/app/signals',
+  '/app/backtesting',
+  '/app/settings',
+  '/app/support',
+];
+
+function isWorkspaceRoute(route: NavigationRoute): route is WorkspaceRoute {
+  return route === '/app' || route.startsWith('/app/');
+}
+
+function resolveRouteFromLocation(): NavigationRoute {
+  const rawPath = window.location.pathname.replace(/\/+$/, '') || '/';
+  const hash = window.location.hash;
+
+  // Detect Supabase recovery link callback in hash
+  if (hash.includes('type=recovery') || rawPath === '/reset-password') {
+    return '/reset-password';
+  }
+  // Detect email confirmation signup callback in hash
+  if (hash.includes('type=signup') || rawPath === '/verify-email') {
+    return '/verify-email';
+  }
+
+  for (const wsRoute of WORKSPACE_ROUTES) {
+    if (rawPath === wsRoute || hash === `#${wsRoute}`) {
+      return wsRoute;
+    }
+  }
+  if (rawPath.startsWith('/app/')) {
+    return '/app';
+  }
+
+  if (rawPath === '/register' || hash === '#/register') return '/register';
+  if (rawPath === '/login' || hash === '#/login') return '/login';
+  if (rawPath === '/forgot-password' || hash === '#/forgot-password') return '/forgot-password';
+
+  return '/';
+}
+
 function AppContent() {
-  const { isConfigured, user } = useAuth();
-
-  const [currentRoute, setCurrentRoute] = useState<NavigationRoute>(() => {
-    const path = window.location.pathname;
-    const hash = window.location.hash;
-
-    // Detect Supabase recovery link callback in hash
-    if (hash.includes('type=recovery') || path === '/reset-password') {
-      return '/reset-password';
-    }
-    // Detect email confirmation signup callback in hash
-    if (hash.includes('type=signup') || path === '/verify-email') {
-      return '/verify-email';
-    }
-    if (path === '/app' || hash === '#/app') return '/app';
-    if (path === '/register' || hash === '#/register') return '/register';
-    if (path === '/login' || hash === '#/login') return '/login';
-    if (path === '/forgot-password' || hash === '#/forgot-password') return '/forgot-password';
-
-    return '/';
-  });
+  const [currentRoute, setCurrentRoute] = useState<NavigationRoute>(() =>
+    resolveRouteFromLocation()
+  );
 
   const [contactOpen, setContactOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -53,24 +81,7 @@ function AppContent() {
   // Sync with browser popstate and URL hash changes
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname;
-      const hash = window.location.hash;
-
-      if (hash.includes('type=recovery') || path === '/reset-password') {
-        setCurrentRoute('/reset-password');
-      } else if (hash.includes('type=signup') || path === '/verify-email') {
-        setCurrentRoute('/verify-email');
-      } else if (path === '/app' || hash === '#/app') {
-        setCurrentRoute('/app');
-      } else if (path === '/register' || hash === '#/register') {
-        setCurrentRoute('/register');
-      } else if (path === '/login' || hash === '#/login') {
-        setCurrentRoute('/login');
-      } else if (path === '/forgot-password' || hash === '#/forgot-password') {
-        setCurrentRoute('/forgot-password');
-      } else {
-        setCurrentRoute('/');
-      }
+      setCurrentRoute(resolveRouteFromLocation());
     };
 
     // Custom event dispatched from AuthContext when Supabase fires PASSWORD_RECOVERY
@@ -164,11 +175,14 @@ function AppContent() {
     );
   }
 
-  if (currentRoute === '/app') {
+  if (isWorkspaceRoute(currentRoute)) {
     return (
       <>
         <SupabaseConfigBanner />
-        <DashboardPreviewPage onNavigate={navigateTo} />
+        <DashboardPreviewPage
+          currentRoute={currentRoute}
+          onNavigate={navigateTo}
+        />
       </>
     );
   }

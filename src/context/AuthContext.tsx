@@ -10,7 +10,7 @@ import {
   resendVerificationEmail,
   AuthResponse 
 } from '../services/auth';
-import { MembershipApprovalStatus } from '../types';
+import { MembershipApprovalStatus, UserRole } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -19,6 +19,9 @@ interface AuthContextType {
   isConfigured: boolean;
   emailVerified: boolean;
   membershipStatus: MembershipApprovalStatus;
+  userRole: UserRole;
+  isApproved: boolean;
+  isAdmin: boolean;
   login: (email: string, password: string) => Promise<AuthResponse<{ user: User; session: Session }>>;
   register: (email: string, password: string) => Promise<AuthResponse<{ user: User | null; session: Session | null }>>;
   logout: () => Promise<void>;
@@ -35,16 +38,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Requirement 7: Membership access separation!
-  // In Stage 4, all verified accounts are 'pending_approval' by administrator.
-  // Email verification is separate from administrator membership approval.
+  // Membership access separation:
+  // Email verification confirms identity; administrator approval is stored in server-controlled app_metadata.
+  // Pending users must not gain premium trading access; admin role remains separate from ordinary users.
   const emailVerified = Boolean(user && user.email_confirmed_at);
+  const userRole: UserRole = useMemo(() => {
+    if (user?.app_metadata?.role === 'admin') return 'admin';
+    return 'trader';
+  }, [user]);
+
   const membershipStatus: MembershipApprovalStatus = useMemo(() => {
     if (!user) return 'none';
-    // When user email is verified, membership status enters 'pending_approval'
-    // In future stages, administrator will grant 'active' status upon external verification.
-    return emailVerified ? 'pending_approval' : 'none';
+    if (!emailVerified) return 'none';
+    if (user.app_metadata?.membership_status === 'active') return 'active';
+    return 'pending_approval';
   }, [user, emailVerified]);
+
+  const isApproved = membershipStatus === 'active';
+  const isAdmin = userRole === 'admin';
 
   const refreshSession = async () => {
     if (!isSupabaseConfigured) {
@@ -126,6 +137,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isConfigured: isSupabaseConfigured,
     emailVerified,
     membershipStatus,
+    userRole,
+    isApproved,
+    isAdmin,
     login,
     register,
     logout,
