@@ -71,7 +71,11 @@ export const WorkspaceDashboardPage: React.FC<WorkspaceDashboardPageProps> = ({
             <div className="p-3 rounded-xl bg-[#101B20] border border-[#1A363E]">
               <span className="text-[10px] text-[#A9BEB5] block">Membership Tier</span>
               <span className="font-bold text-[#168BFF] block mt-0.5">
-                {membershipStatus === 'active' ? 'Cohort Active' : 'Step 3: Pending'}
+                {membershipStatus === 'active'
+                  ? 'Cohort Active'
+                  : membershipStatus === 'pending'
+                    ? 'Step 3: Pending'
+                    : `Access ${membershipStatus}`}
               </span>
               <span className="text-[10px] text-[#A9BEB5] block mt-1">
                 {isApproved ? 'Full workspace unlocked' : 'Trading modules locked'}

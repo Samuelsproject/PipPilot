@@ -62,7 +62,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
               <div className="p-3 rounded-xl bg-[#101B20] border border-[#1A363E] flex justify-between">
                 <span className="text-[#A9BEB5]">Membership Status</span>
                 <span className={membershipStatus === 'active' ? 'text-[#16A36A] font-bold' : 'text-[#E69A36] font-bold'}>
-                  {membershipStatus === 'active' ? 'Active' : 'Pending Admin Approval'}
+                  {membershipStatus === 'pending'
+                    ? 'Pending admin approval'
+                    : membershipStatus.charAt(0).toUpperCase() + membershipStatus.slice(1)}
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-[#101B20] border border-[#1A363E] flex justify-between">

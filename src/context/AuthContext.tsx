@@ -22,6 +22,7 @@ interface AuthContextType {
   userRole: UserRole;
   isApproved: boolean;
   isAdmin: boolean;
+  isDesignatedAdmin: boolean;
   login: (email: string, password: string) => Promise<AuthResponse<{ user: User; session: Session }>>;
   register: (email: string, password: string) => Promise<AuthResponse<{ user: User | null; session: Session | null }>>;
   logout: () => Promise<void>;
@@ -42,20 +43,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Email verification confirms identity; administrator approval is stored in server-controlled app_metadata.
   // Pending users must not gain premium trading access; admin role remains separate from ordinary users.
   const emailVerified = Boolean(user && user.email_confirmed_at);
+  const isDesignatedAdmin = Boolean(
+    user?.email?.trim().toLowerCase() === 'pippilotaiadmin@gmail.com' && emailVerified,
+  );
   const userRole: UserRole = useMemo(() => {
-    if (user?.app_metadata?.role === 'admin') return 'admin';
+    if (isDesignatedAdmin && user?.app_metadata?.role === 'admin') return 'admin';
     return 'trader';
-  }, [user]);
+  }, [user, isDesignatedAdmin]);
 
   const membershipStatus: MembershipApprovalStatus = useMemo(() => {
-    if (!user) return 'none';
-    if (!emailVerified) return 'none';
-    if (user.app_metadata?.membership_status === 'active') return 'active';
-    return 'pending_approval';
+    const value = user?.app_metadata?.membership_status;
+    if (value === 'active' || value === 'suspended' || value === 'expired') return value;
+    return 'pending';
   }, [user, emailVerified]);
 
   const isApproved = membershipStatus === 'active';
-  const isAdmin = userRole === 'admin';
+  const isAdmin = isDesignatedAdmin && userRole === 'admin';
 
   const refreshSession = async () => {
     if (!isSupabaseConfigured) {
@@ -140,6 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userRole,
     isApproved,
     isAdmin,
+    isDesignatedAdmin,
     login,
     register,
     logout,

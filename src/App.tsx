@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NavigationRoute, WorkspaceRoute } from './types';
 import { AuthProvider } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
@@ -23,7 +24,7 @@ import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { SupabaseConfigBanner } from './components/SupabaseConfigBanner';
 import { ContactModal, PrivacyModal, TermsModal } from './components/Modals';
 
-const WORKSPACE_ROUTES: WorkspaceRoute[] = [
+export const WORKSPACE_ROUTES: WorkspaceRoute[] = [
   '/app',
   '/app/trading',
   '/app/strategies',
@@ -34,13 +35,16 @@ const WORKSPACE_ROUTES: WorkspaceRoute[] = [
   '/app/backtesting',
   '/app/settings',
   '/app/support',
+  '/app/admin',
 ];
+
+const queryClient = new QueryClient();
 
 function isWorkspaceRoute(route: NavigationRoute): route is WorkspaceRoute {
   return route === '/app' || route.startsWith('/app/');
 }
 
-function resolveRouteFromLocation(): NavigationRoute {
+export function resolveRouteFromLocation(): NavigationRoute {
   const rawPath = window.location.pathname.replace(/\/+$/, '') || '/';
   const hash = window.location.hash;
 
@@ -222,8 +226,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

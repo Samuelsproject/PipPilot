@@ -16,6 +16,7 @@ import {
   Plug,
   Settings,
   Shield,
+  ShieldCheck,
   Sparkles,
   User,
   X,
@@ -44,6 +45,13 @@ export const WORKSPACE_NAV_ITEMS: WorkspaceNavItem[] = [
   { label: 'Help and Support', route: '/app/support', icon: HelpCircle, requiresApproval: false },
 ];
 
+export const ADMIN_NAV_ITEM: WorkspaceNavItem = {
+  label: 'Admin Panel',
+  route: '/app/admin',
+  icon: ShieldCheck,
+  requiresApproval: false,
+};
+
 interface WorkspaceLayoutProps {
   currentRoute: WorkspaceRoute;
   onNavigate: (route: NavigationRoute) => void;
@@ -55,14 +63,17 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
   onNavigate,
   children,
 }) => {
-  const { user, emailVerified, membershipStatus, userRole, isApproved, logout } = useAuth();
+  const { user, emailVerified, membershipStatus, userRole, isApproved, isDesignatedAdmin, logout } = useAuth();
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
+  const visibleNavItems = isDesignatedAdmin
+    ? [...WORKSPACE_NAV_ITEMS, ADMIN_NAV_ITEM]
+    : WORKSPACE_NAV_ITEMS;
   const activeItem =
-    WORKSPACE_NAV_ITEMS.find((item) => item.route === currentRoute) ?? WORKSPACE_NAV_ITEMS[0];
+    visibleNavItems.find((item) => item.route === currentRoute) ?? WORKSPACE_NAV_ITEMS[0];
 
   const handleSignOut = async () => {
     setMobileDrawerOpen(false);
@@ -186,14 +197,14 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
           </button>
         </div>
 
-        {/* 10 Navigation Items */}
+        {/* Original workspace navigation and designated administrator entry */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {!sidebarCollapsed && (
             <p className="px-3 pb-2 text-[10px] font-mono font-bold uppercase tracking-wider text-[#A9BEB5]/70">
               Platform Modules
             </p>
           )}
-          {WORKSPACE_NAV_ITEMS.map((item) => renderNavItem(item, sidebarCollapsed, false))}
+          {visibleNavItems.map((item) => renderNavItem(item, sidebarCollapsed, false))}
         </nav>
 
         {/* Sidebar Footer Status */}
@@ -261,9 +272,7 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
                     : 'bg-[#9560E8]/20 text-[#E8F2EE] border-[#9560E8]/35'
                 }`}
               >
-                {membershipStatus === 'active'
-                  ? 'Membership: Active'
-                  : 'Membership: Pending Admin Approval'}
+                {`Membership: ${membershipStatus.replace('_', ' ')}`}
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#101B20] border border-[#1A363E] text-[#168BFF] uppercase">
                 {userRole}
@@ -412,7 +421,7 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
 
             {/* Navigation Items */}
             <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-              {WORKSPACE_NAV_ITEMS.map((item) => renderNavItem(item, false, true))}
+              {visibleNavItems.map((item) => renderNavItem(item, false, true))}
             </nav>
 
             {/* Drawer Footer */}

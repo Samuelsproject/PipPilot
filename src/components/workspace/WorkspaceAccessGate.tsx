@@ -169,7 +169,7 @@ export const PendingApprovalGuard: React.FC<PendingApprovalGuardProps> = ({
   featureName,
   onNavigate,
 }) => {
-  const { user, userRole } = useAuth();
+  const { user, userRole, membershipStatus } = useAuth();
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-2">
@@ -177,7 +177,9 @@ export const PendingApprovalGuard: React.FC<PendingApprovalGuardProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1A363E] pb-4">
           <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-[#E69A36]/15 text-[#E69A36] border border-[#E69A36]/30">
             <Clock className="w-3.5 h-3.5" />
-            MEMBERSHIP PENDING APPROVAL
+            {membershipStatus === 'pending'
+              ? 'MEMBERSHIP PENDING APPROVAL'
+              : `MEMBERSHIP ${membershipStatus.toUpperCase()}`}
           </span>
           <span className="text-[11px] font-mono text-[#A9BEB5]">
             Role: <strong className="text-[#E8F2EE] uppercase">{userRole}</strong>
@@ -186,10 +188,12 @@ export const PendingApprovalGuard: React.FC<PendingApprovalGuardProps> = ({
 
         <div className="space-y-2">
           <h2 className="text-xl sm:text-2xl font-extrabold text-[#E8F2EE] purple-glow-text">
-            {featureName} Requires Approved Membership
+            {membershipStatus === 'pending'
+              ? `${featureName} Requires Approved Membership`
+              : `${featureName} Access Is ${membershipStatus}`}
           </h2>
           <p className="text-xs sm:text-sm text-[#A9BEB5] leading-relaxed">
-            Your email (<span className="font-mono text-[#E8F2EE]">{user?.email}</span>) is verified, confirming identity (Onboarding Step 2). Protected trading modules are unlocked only after administrator cohort approval (Onboarding Step 3).
+            Your email (<span className="font-mono text-[#E8F2EE]">{user?.email}</span>) is verified. Protected trading modules require active administrator-approved membership. Contact support if you believe this status is incorrect.
           </p>
         </div>
 

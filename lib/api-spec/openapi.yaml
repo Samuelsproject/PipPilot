@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: admin
+    description: Administrator-only membership operations
 paths:
   /healthz:
     get:
@@ -24,7 +26,158 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List registered users for the designated administrator
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Administrator identity and registered users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUsersResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "403":
+          description: Caller is not the verified designated administrator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "503":
+          description: Supabase administrator credentials are not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+  /admin/users/{userId}/membership:
+    patch:
+      operationId: updateAdminMembership
+      tags: [admin]
+      summary: Update a registered user's membership status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MembershipUpdateInput"
+      responses:
+        "200":
+          description: Membership status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipUpdateResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "403":
+          description: Caller is not the verified designated administrator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "503":
+          description: Supabase administrator credentials are not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+  /admin/users/{userId}/terminate-sessions:
+    post:
+      operationId: terminateAdminUserSessions
+      tags: [admin]
+      summary: Terminate all active sessions for a registered user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User sessions terminated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TerminateSessionsResponse"
+        "501":
+          description: Supabase cannot terminate sessions by user ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "400":
+          description: Invalid user identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "403":
+          description: Caller is not the verified designated administrator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
+        "503":
+          description: Supabase administrator credentials are not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminErrorResponse"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +186,65 @@ components:
           type: string
       required:
         - status
+    MembershipStatus:
+      type: string
+      enum: [pending, active, suspended, expired]
+    AdminMember:
+      type: object
+      required: [id, email, emailVerified, role, membershipStatus, createdAt, lastSignInAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: ["string", "null"]
+        emailVerified:
+          type: boolean
+        role:
+          type: string
+          enum: [trader, admin]
+        membershipStatus:
+          $ref: "#/components/schemas/MembershipStatus"
+        createdAt:
+          type: string
+          format: date-time
+        lastSignInAt:
+          type: ["string", "null"]
+          format: date-time
+    AdminUsersResponse:
+      type: object
+      required: [admin, users]
+      properties:
+        admin:
+          $ref: "#/components/schemas/AdminMember"
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminMember"
+    MembershipUpdateInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/MembershipStatus"
+    MembershipUpdateResponse:
+      type: object
+      required: [user, sessionsTerminated]
+      properties:
+        user:
+          $ref: "#/components/schemas/AdminMember"
+        sessionsTerminated:
+          type: boolean
+    TerminateSessionsResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+    AdminErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
 

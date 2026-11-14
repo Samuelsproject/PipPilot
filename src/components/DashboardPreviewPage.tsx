@@ -20,6 +20,7 @@ import { SignalHistoryPage } from '../pages/workspace/SignalHistoryPage';
 import { BacktestingPage } from '../pages/workspace/BacktestingPage';
 import { SettingsPage } from '../pages/workspace/SettingsPage';
 import { HelpSupportPage } from '../pages/workspace/HelpSupportPage';
+import { AdminMembersPage } from '../pages/workspace/AdminMembersPage';
 
 interface DashboardPreviewPageProps {
   currentRoute?: WorkspaceRoute;
@@ -99,6 +100,8 @@ export const DashboardPreviewPage: React.FC<DashboardPreviewPageProps> = ({
         return <SettingsPage onNavigate={onNavigate} />;
       case '/app/support':
         return <HelpSupportPage />;
+      case '/app/admin':
+        return <AdminMembersPage />;
       case '/app':
       default:
         return <WorkspaceDashboardPage onNavigate={onNavigate} />;

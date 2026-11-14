@@ -8,7 +8,8 @@ export type WorkspaceRoute =
   | '/app/signals'
   | '/app/backtesting'
   | '/app/settings'
-  | '/app/support';
+  | '/app/support'
+  | '/app/admin';
 
 export type NavigationRoute =
   | '/'
@@ -19,7 +20,7 @@ export type NavigationRoute =
   | '/reset-password'
   | '/verify-email';
 
-export type MembershipApprovalStatus = 'none' | 'pending_approval' | 'active';
+export type MembershipApprovalStatus = 'pending' | 'active' | 'suspended' | 'expired';
 
 export type UserRole = 'trader' | 'admin';
 
