@@ -18,6 +18,21 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * Explicitly initialize server-managed admin metadata for the authenticated designated administrator. The account identity and metadata are derived server-side.
+ * @summary Initialize the verified designated administrator
+ */
+export const InitializeAdminResponse = zod.object({
+  "id": zod.string().uuid(),
+  "email": zod.string().nullable(),
+  "emailVerified": zod.boolean(),
+  "role": zod.enum(['trader', 'admin']),
+  "membershipStatus": zod.enum(['pending', 'active', 'suspended', 'expired']),
+  "createdAt": zod.coerce.date(),
+  "lastSignInAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary List registered users for the designated administrator
  */
 export const ListAdminUsersResponse = zod.object({

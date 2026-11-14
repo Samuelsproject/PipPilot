@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
+  InitializeAdminResponse,
   ListAdminUsersResponse,
   TerminateAdminUserSessionsParams,
   UpdateAdminMembershipBody,
@@ -10,8 +11,11 @@ import type { User } from "@supabase/supabase-js";
 import {
   DESIGNATED_ADMIN_EMAIL,
   createAdminSupabaseClient,
+  isDesignatedAdminEmail,
+  isVerifiedDesignatedAdmin,
 } from "../lib/admin-supabase";
 import {
+  createRequireDesignatedAdminIdentity,
   createRequireAdmin,
   type AdminClientProvider,
 } from "../middlewares/require-admin";
@@ -19,11 +23,36 @@ import {
 const MEMBERSHIP_STATES = new Set(["pending", "active", "suspended", "expired"]);
 const PAGE_SIZE = 1000;
 const MAX_USERS = 100_000;
+const administratorBootstrapLocks = new Map<string, Promise<void>>();
+
+// Serializes duplicate bootstrap requests handled by this API process.
+async function withAdministratorBootstrapLock<T>(
+  userId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previous = administratorBootstrapLocks.get(userId) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const queued = previous.then(() => current);
+  administratorBootstrapLocks.set(userId, queued);
+
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (administratorBootstrapLocks.get(userId) === queued) {
+      administratorBootstrapLocks.delete(userId);
+    }
+  }
+}
 
 function toAdminMember(user: User) {
   const emailVerified = Boolean(user.email_confirmed_at || user.confirmed_at);
   const isDesignatedAdmin =
-    user.email?.trim().toLowerCase() === DESIGNATED_ADMIN_EMAIL &&
+    isDesignatedAdminEmail(user.email) &&
     emailVerified &&
     user.app_metadata["role"] === "admin";
   const status = user.app_metadata["membership_status"];
@@ -64,6 +93,87 @@ export function createAdminRouter(
 ): IRouter {
   const router: IRouter = Router();
   const requireAdmin = createRequireAdmin(provideAdminClient);
+  const requireDesignatedAdminIdentity =
+    createRequireDesignatedAdminIdentity(provideAdminClient);
+
+  router.post(
+    "/admin/initialize",
+    requireDesignatedAdminIdentity,
+    async (req: Request, res: Response): Promise<void> => {
+      const client = req.adminSupabaseClient;
+      const adminUserId = req.adminUserId;
+      if (!client || !adminUserId) {
+        sendError(res, 401, "Administrator authorization is required.");
+        return;
+      }
+
+      type InitializeAdminResult =
+        | { ok: true; user: User }
+        | { ok: false; status: number; message: string };
+
+      const result = await withAdministratorBootstrapLock<InitializeAdminResult>(
+        adminUserId,
+        async () => {
+        const { data: currentResult, error: lookupError } =
+          await client.auth.admin.getUserById(adminUserId);
+        const currentUser = currentResult.user;
+        if (lookupError || !currentUser || currentUser.id !== adminUserId) {
+          return {
+            ok: false,
+            status: 502,
+            message: "The administrator account could not be loaded.",
+          };
+        }
+
+        if (!isVerifiedDesignatedAdmin(currentUser)) {
+          return {
+            ok: false,
+            status: 403,
+            message: "Administrator access is restricted.",
+          };
+        }
+
+        const currentMetadata = currentUser.app_metadata ?? {};
+        if (
+          currentMetadata["role"] === "admin" &&
+          currentMetadata["membership_status"] === "active"
+        ) {
+          return { ok: true, user: currentUser };
+        }
+
+        const { data: updatedResult, error: updateError } =
+          await client.auth.admin.updateUserById(adminUserId, {
+            app_metadata: {
+              ...currentMetadata,
+              role: "admin",
+              membership_status: "active",
+            },
+          });
+        if (updateError || !updatedResult.user) {
+          return {
+            ok: false,
+            status: 502,
+            message: "Administrator access could not be initialized.",
+          };
+        }
+
+        return { ok: true, user: updatedResult.user };
+      },
+      );
+
+      if (!result.ok) {
+        sendError(res, result.status, result.message);
+        return;
+      }
+
+      const parsed = InitializeAdminResponse.safeParse(toAdminMember(result.user));
+      if (!parsed.success) {
+        sendError(res, 502, "Administrator initialization returned invalid data.");
+        return;
+      }
+      res.json(parsed.data);
+    },
+  );
 
   router.get("/admin/users", requireAdmin, async (req: Request, res: Response) => {
     const client = req.adminSupabaseClient;
@@ -116,7 +226,7 @@ export function createAdminRouter(
 
       const { userId } = params.data;
       if (userId === adminUserId) {
-        sendError(res, 400, "The administrator's own membership cannot be changed here.");
+        sendError(res, 403, "The designated administrator's membership cannot be changed here.");
         return;
       }
 
@@ -128,6 +238,11 @@ export function createAdminRouter(
       }
 
       const targetUser = targetResult.user;
+      if (isDesignatedAdminEmail(targetUser.email)) {
+        sendError(res, 403, "The designated administrator's membership cannot be changed here.");
+        return;
+      }
+
       const appMetadata = targetUser.app_metadata ?? {};
       const { data: updatedResult, error: updateError } =
         await client.auth.admin.updateUserById(userId, {

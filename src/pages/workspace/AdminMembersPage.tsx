@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  useInitializeAdmin,
   useListAdminUsers,
   useTerminateAdminUserSessions,
   useUpdateAdminMembership,
@@ -99,7 +100,7 @@ function StatusBadge({ status }: { status: MembershipStatus }) {
 }
 
 export function AdminMembersPage() {
-  const { session, user, isLoading: authLoading } = useAuth();
+  const { session, user, isLoading: authLoading, isDesignatedAdmin } = useAuth();
   const queryClient = useQueryClient();
   const token = session?.access_token;
   const request = useMemo(
@@ -110,6 +111,7 @@ export function AdminMembersPage() {
     request,
     query: { enabled: Boolean(token), queryKey: ['/api/admin/users'] },
   });
+  const initializeAdminMutation = useInitializeAdmin({ request });
   const updateMembership = useUpdateAdminMembership({ request });
   const terminateSessions = useTerminateAdminUserSessions({ request });
 
@@ -123,7 +125,9 @@ export function AdminMembersPage() {
   const response = adminQuery.data;
   const users = response?.users ?? [];
   const queryDenied = [401, 403].includes(errorStatus(adminQuery.error) ?? 0);
-  const denied = queryDenied || mutationDenied;
+  const initializationRequired =
+    errorStatus(adminQuery.error) === 403 && isDesignatedAdmin && !mutationDenied;
+  const denied = (queryDenied && !initializationRequired) || mutationDenied;
   const counts = useMemo(() => ({
     total: users.length,
     pending: users.filter((member) => member.membershipStatus === 'pending').length,
@@ -144,6 +148,16 @@ export function AdminMembersPage() {
   const refreshUsers = async () => {
     setFeedback(null);
     await adminQuery.refetch();
+  };
+
+  const initializeAdminAccess = async () => {
+    setFeedback(null);
+    try {
+      await initializeAdminMutation.mutateAsync(undefined);
+      await queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
+    } catch (error) {
+      setFeedback({ type: 'error', text: errorMessage(error) });
+    }
   };
 
   const runAction = async (action: PendingAction) => {
@@ -244,6 +258,36 @@ export function AdminMembersPage() {
             <RefreshCw className="h-4 w-4" /> Retry access check
           </button>
         )}
+      </section>
+    );
+  }
+
+  if (initializationRequired) {
+    return (
+      <section className="mx-auto mt-8 max-w-2xl rounded-3xl border border-[#2ABB83]/25 bg-[#17282D] p-6 sm:p-9" data-testid="state-admin-initialization-required">
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#2ABB83]/25 bg-[#2ABB83]/10 text-[#54D89D]">
+          <ShieldCheck className="h-5 w-5" />
+        </div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#54D89D]">Designated administrator verified</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[#E8F2EE]">Initialize administrator access</h1>
+        <p className="mt-3 max-w-lg text-sm leading-6 text-[#A9BEB5]">
+          This explicit action sets the designated account’s server-managed role to admin and membership to active. No other account is changed.
+        </p>
+        {feedback?.type === 'error' && (
+          <p className="mt-4 rounded-xl border border-[#E05252]/30 bg-[#E05252]/[0.08] px-4 py-3 text-sm text-[#F08C84]" role="alert" data-testid="message-admin-initialization-error">
+            {feedback.text}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => void initializeAdminAccess()}
+          disabled={initializeAdminMutation.isPending}
+          className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#20845F] px-4 text-sm font-bold text-[#E8F2EE] transition hover:bg-[#26966C] disabled:cursor-wait disabled:opacity-50"
+          data-testid="button-initialize-admin"
+        >
+          {initializeAdminMutation.isPending && <RefreshCw className="h-4 w-4 animate-spin" />}
+          Initialize access
+        </button>
       </section>
     );
   }

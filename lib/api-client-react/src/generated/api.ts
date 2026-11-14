@@ -26,6 +26,7 @@ import type {
 
 import type {
   AdminErrorResponse,
+  AdminMember,
   AdminUsersResponse,
   HealthStatus,
   MembershipUpdateInput,
@@ -161,6 +162,81 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getInitializeAdminUrl = () => {
+
+
+
+
+  return `/api/admin/initialize`
+}
+
+/**
+ * Explicitly initialize server-managed admin metadata for the authenticated designated administrator. The account identity and metadata are derived server-side.
+ * @summary Initialize the verified designated administrator
+ */
+export const initializeAdmin = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminMember> => {
+
+  return customFetch<AdminMember>(getInitializeAdminUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getInitializeAdminMutationKey = () => ['initializeAdmin'] as const;
+
+export const getInitializeAdminMutationOptions = <TError = ErrorType<AdminErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeAdmin>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof initializeAdmin>>, TError,void, TContext> => {
+
+const mutationKey = getInitializeAdminMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof initializeAdmin>>, void> = () => {
+
+
+          return  initializeAdmin(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InitializeAdminMutationResult = NonNullable<Awaited<ReturnType<typeof initializeAdmin>>>
+
+    export type InitializeAdminMutationError = ErrorType<AdminErrorResponse>
+
+
+    /**
+ * @summary Initialize the verified designated administrator
+ */
+export const useInitializeAdmin = <TError = ErrorType<AdminErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeAdmin>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof initializeAdmin>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getInitializeAdminMutationOptions(options), queryClient);
+    }
 
 export const getListAdminUsersUrl = () => {
 

@@ -1,9 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import {
   AdminSupabaseConfigError,
   createAdminSupabaseClient,
-  DESIGNATED_ADMIN_EMAIL,
+  isVerifiedDesignatedAdmin,
 } from "../lib/admin-supabase";
 
 declare global {
@@ -11,16 +11,17 @@ declare global {
     interface Request {
       adminSupabaseClient?: SupabaseClient;
       adminUserId?: string;
+      authenticatedAdminUser?: User;
     }
   }
 }
 
 export type AdminClientProvider = () => SupabaseClient;
 
-export function createRequireAdmin(
+export function createRequireDesignatedAdminIdentity(
   provideAdminClient: AdminClientProvider = createAdminSupabaseClient,
 ) {
-  return async function requireAdmin(
+  return async function requireDesignatedAdminIdentity(
     req: Request,
     res: Response,
     next: NextFunction,
@@ -53,42 +54,41 @@ export function createRequireAdmin(
         return;
       }
 
-      const isVerifiedDesignatedAdmin =
-        user.email?.trim().toLowerCase() === DESIGNATED_ADMIN_EMAIL &&
-        Boolean(user.email_confirmed_at || user.confirmed_at);
-
-      if (!isVerifiedDesignatedAdmin) {
+      if (!isVerifiedDesignatedAdmin(user)) {
         res.status(403).json({ error: "Administrator access is restricted." });
         return;
       }
 
-      const currentMetadata = user.app_metadata ?? {};
-      if (
-        currentMetadata["role"] !== "admin" ||
-        currentMetadata["membership_status"] !== "active"
-      ) {
-        const { error: updateError } = await client.auth.admin.updateUserById(
-          user.id,
-          {
-            app_metadata: {
-              ...currentMetadata,
-              role: "admin",
-              membership_status: "active",
-            },
-          },
-        );
-
-        if (updateError) {
-          res.status(503).json({ error: "Administrator authorization could not be initialized." });
-          return;
-        }
-      }
-
       req.adminSupabaseClient = client;
       req.adminUserId = user.id;
+      req.authenticatedAdminUser = user;
       next();
     } catch (error) {
       next(error);
     }
+  };
+}
+
+export function createRequireAdmin(
+  provideAdminClient: AdminClientProvider = createAdminSupabaseClient,
+) {
+  const requireDesignatedAdminIdentity =
+    createRequireDesignatedAdminIdentity(provideAdminClient);
+
+  return function requireAdmin(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    return requireDesignatedAdminIdentity(req, res, () => {
+      const metadata = req.authenticatedAdminUser?.app_metadata ?? {};
+      if (metadata["role"] !== "admin" || metadata["membership_status"] !== "active") {
+        res.status(403).json({
+          error: "Administrator access must be initialized before use.",
+        });
+        return;
+      }
+      next();
+    });
   };
 }

@@ -1,6 +1,19 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 
 export const DESIGNATED_ADMIN_EMAIL = "pippilotaiadmin@gmail.com";
+
+export function isDesignatedAdminEmail(email: string | null | undefined): boolean {
+  return email?.trim().toLowerCase() === DESIGNATED_ADMIN_EMAIL;
+}
+
+export function isVerifiedDesignatedAdmin(
+  user: Pick<User, "email" | "email_confirmed_at" | "confirmed_at">,
+): boolean {
+  return (
+    isDesignatedAdminEmail(user.email) &&
+    Boolean(user.email_confirmed_at || user.confirmed_at)
+  );
+}
 
 export class AdminSupabaseConfigError extends Error {
   constructor() {
