@@ -66,6 +66,7 @@ describe('PipPilotAi authentication screens', () => {
       />,
     );
 
+    expect(screen.getByRole('heading', { name: 'Create your PipPilotAi account' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'new@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('Create a strong password'), { target: { value: 'StrongPass1!' } });
     fireEvent.change(screen.getByPlaceholderText('Repeat your password'), { target: { value: 'StrongPass1!' } });
@@ -75,7 +76,7 @@ describe('PipPilotAi authentication screens', () => {
     expect(window.sessionStorage.getItem('pippilot:registration-complete')).toBe('1');
     render(<LoginPage onNavigate={onNavigate} />);
     expect((await screen.findByRole('status')).textContent).toContain(
-      'Your account was created. Sign in after verifying your email if verification is required.',
+      'Your PipPilotAi account was created. Sign in after verifying your email if verification is required.',
     );
   });
 
@@ -84,10 +85,11 @@ describe('PipPilotAi authentication screens', () => {
     useAuthMock.mockReturnValue(auth);
     render(<ForgotPasswordPage onNavigate={vi.fn()} />);
 
+    expect(screen.getByRole('heading', { name: 'Reset your PipPilotAi password' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'unknown@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send Recovery Link' }));
 
-    expect(await screen.findByText(/if an account matches/i)).toBeTruthy();
+    expect(await screen.findByText(/if a PipPilotAi account matches/i)).toBeTruthy();
     expect(screen.queryByText(/account does not exist/i)).toBeNull();
   });
 
@@ -96,7 +98,7 @@ describe('PipPilotAi authentication screens', () => {
     useAuthMock.mockReturnValue(noRecoveryAuth);
     const onNavigate = vi.fn();
     const { unmount } = render(<ResetPasswordPage onNavigate={onNavigate} />);
-    expect(await screen.findByRole('heading', { name: 'Recovery Link Expired' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'PipPilotAi recovery link expired' })).toBeTruthy();
     unmount();
 
     const recoveryAuth = {
@@ -106,10 +108,11 @@ describe('PipPilotAi authentication screens', () => {
     };
     useAuthMock.mockReturnValue(recoveryAuth);
     render(<ResetPasswordPage onNavigate={onNavigate} />);
+    expect(screen.getByRole('heading', { name: 'Choose a new PipPilotAi password' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'StrongPass1!' } });
     fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'StrongPass1!' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save New Password' }));
-    expect(await screen.findByRole('heading', { name: 'Password Updated' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'PipPilotAi password updated' })).toBeTruthy();
     expect(recoveryAuth.updatePassword).toHaveBeenCalledWith('StrongPass1!');
   });
 
@@ -121,8 +124,8 @@ describe('PipPilotAi authentication screens', () => {
 
     render(<VerifyEmailPage onNavigate={vi.fn()} />);
 
-    expect(await screen.findByRole('heading', { name: 'Verify Your Email' })).toBeTruthy();
-    expect(screen.queryByText('Email Address Verified!')).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Verify your PipPilotAi account' })).toBeTruthy();
+    expect(screen.queryByText('PipPilotAi account verified')).toBeNull();
     expect(auth.refreshSession).toHaveBeenCalled();
   });
 
@@ -132,6 +135,18 @@ describe('PipPilotAi authentication screens', () => {
 
     render(<VerifyEmailPage onNavigate={vi.fn()} />);
 
-    expect(await screen.findByRole('heading', { name: 'Verification Link Expired' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'PipPilotAi verification link expired' })).toBeTruthy();
+  });
+
+  it('uses PipPilotAi branding after successful email verification', async () => {
+    useAuthMock.mockReturnValue({
+      ...defaultAuth(),
+      user: { email: 'member@example.com' },
+      emailVerified: true,
+    });
+
+    render(<VerifyEmailPage onNavigate={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'PipPilotAi account verified' })).toBeTruthy();
   });
 });

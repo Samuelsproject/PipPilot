@@ -38,6 +38,15 @@ export const WORKSPACE_ROUTES: WorkspaceRoute[] = [
   '/app/admin',
 ];
 
+export const AUTH_PAGE_TITLES: Partial<Record<NavigationRoute, string>> = {
+  '/login': 'Sign in to PipPilotAi',
+  '/register': 'Create your PipPilotAi account',
+  '/verify-email': 'Verify your PipPilotAi account',
+  '/forgot-password': 'Reset your PipPilotAi password',
+  '/reset-password': 'Reset your PipPilotAi password',
+};
+
+const LANDING_PAGE_TITLE = 'PipPilotAi — Intelligent Trading Analysis & Discipline';
 const queryClient = new QueryClient();
 
 function isWorkspaceRoute(route: NavigationRoute): route is WorkspaceRoute {
@@ -84,6 +93,12 @@ function AppContent() {
   const [contactOpen, setContactOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
+
+  useEffect(() => {
+    document.title =
+      AUTH_PAGE_TITLES[currentRoute] ??
+      (isWorkspaceRoute(currentRoute) ? 'PipPilotAi | Workspace' : LANDING_PAGE_TITLE);
+  }, [currentRoute]);
 
   // Sync with browser popstate and URL hash changes
   useEffect(() => {

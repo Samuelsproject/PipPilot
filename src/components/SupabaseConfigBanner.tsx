@@ -62,23 +62,30 @@ export const SupabaseConfigBanner: React.FC = () => {
               <p className="text-[#A9BEB5]">
                 In <strong>Authentication → URL Configuration</strong>, set Site URL to the app origin and add these exact Redirect URLs:
               </p>
-              <ul className="space-y-1 rounded bg-[#101B20] p-2 font-mono text-[10px] text-[#E8F2EE]">
-                <li>{currentOrigin}/verify-email</li>
-                <li>{currentOrigin}/reset-password</li>
-              </ul>
+              <div className="space-y-1">
+                {[
+                  { id: 'verify', label: 'Email confirmation', path: '/verify-email' },
+                  { id: 'recovery', label: 'Password recovery', path: '/reset-password' },
+                ].map(({ id, label, path }) => (
+                  <div key={id} className="flex items-center justify-between gap-2 rounded bg-[#101B20] p-2 font-mono text-[10px] text-[#E8F2EE]">
+                    <span className="min-w-0">
+                      <span className="block font-sans text-[#A9BEB5]">{label}</span>
+                      <span className="break-all">{currentOrigin}{path}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(`${currentOrigin}${path}`, id)}
+                      className="shrink-0 p-1 hover:text-[#16A36A]"
+                      aria-label={`Copy ${label.toLowerCase()} redirect URL`}
+                    >
+                      {copied === id ? <Check className="w-3.5 h-3.5 text-[#16A36A]" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                ))}
+              </div>
               <p className="text-[10px] text-[#A9BEB5]">
                 Add the matching production URLs and development preview origin when testing. Avoid adding broad wildcard domains in production.
               </p>
-              <div className="flex items-center justify-between p-1.5 rounded bg-[#101B20] font-mono text-[10px] text-[#E8F2EE]">
-                <span className="truncate">{currentOrigin}/**</span>
-                <button
-                  onClick={() => copyToClipboard(`${currentOrigin}/**`, 'redirect')}
-                  className="p-1 hover:text-[#16A36A]"
-                  title="Copy redirect pattern"
-                >
-                  {copied === 'redirect' ? <Check className="w-3.5 h-3.5 text-[#16A36A]" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
-              </div>
             </div>
 
             <div className="p-3 rounded-lg bg-[#152B30] border border-[#1A363E] space-y-2">

@@ -92,9 +92,9 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onNaviga
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-extrabold text-[#E8F2EE]">Check Your Inbox</h2>
+                <h2 className="text-2xl font-extrabold text-[#E8F2EE]">Check your inbox for PipPilotAi</h2>
                 <p className="text-xs text-[#A9BEB5] leading-relaxed">
-                  If an account matches <strong className="text-[#E8F2EE] font-mono">{email}</strong>, a secure password recovery link has been dispatched.
+                  If a PipPilotAi account matches <strong className="text-[#E8F2EE] font-mono">{email}</strong>, we will send a password reset link.
                 </p>
               </div>
 
@@ -124,7 +124,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onNaviga
                 <div className="w-12 h-12 rounded-2xl bg-[#168BFF]/15 border border-[#168BFF]/30 text-[#168BFF] flex items-center justify-center mx-auto mb-2">
                   <KeyRound className="w-6 h-6" />
                 </div>
-                <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Reset Password</h1>
+                <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Reset your PipPilotAi password</h1>
                 <p className="text-xs text-[#A9BEB5]">
                   Enter your registered email to receive recovery instructions
                 </p>

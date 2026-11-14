@@ -119,7 +119,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ onNavigate }) 
               </div>
 
               <div className="space-y-2">
-                <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Email Address Verified!</h1>
+                <h1 className="text-2xl font-extrabold text-[#E8F2EE]">PipPilotAi account verified</h1>
                 <p className="text-xs text-[#A9BEB5] leading-relaxed">
                   Your PipPilotAi trader account email has been successfully confirmed.
                 </p>
@@ -152,7 +152,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ onNavigate }) 
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-extrabold text-[#E8F2EE]">Verification Link Expired</h2>
+                <h2 className="text-2xl font-extrabold text-[#E8F2EE]">PipPilotAi verification link expired</h2>
                 <p className="text-xs text-[#A9BEB5] leading-relaxed">
                   {errorMessage || 'This verification link is invalid or has already been used.'}
                 </p>
@@ -200,9 +200,9 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ onNavigate }) 
                 <div className="w-14 h-14 rounded-2xl bg-[#168BFF]/20 border border-[#168BFF]/40 text-[#168BFF] flex items-center justify-center mx-auto">
                   <Mail className="w-7 h-7" />
                 </div>
-                <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Verify Your Email</h1>
+                <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Verify your PipPilotAi account</h1>
                 <p className="text-xs text-[#A9BEB5] leading-relaxed">
-                  Before signing in, verify your email address by clicking the link sent to your inbox.
+                  Before signing in, confirm the email address for your PipPilotAi account using the link we sent.
                 </p>
               </div>
 

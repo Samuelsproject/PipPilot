@@ -151,7 +151,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onNavigate
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-extrabold text-[#E8F2EE]">Password Updated</h2>
+                <h2 className="text-2xl font-extrabold text-[#E8F2EE]">PipPilotAi password updated</h2>
                 <p className="text-xs text-[#A9BEB5] leading-relaxed">
                   Your PipPilotAi password has been securely updated. You can now sign in with your new credentials.
                 </p>
@@ -174,7 +174,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onNavigate
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-extrabold text-[#E8F2EE]">Recovery Link Expired</h2>
+                <h2 className="text-2xl font-extrabold text-[#E8F2EE]">PipPilotAi recovery link expired</h2>
                 <p className="text-xs text-[#A9BEB5] leading-relaxed">
                   This recovery token is invalid or has already been consumed. For your security, password links are single-use and time-limited.
                 </p>
@@ -202,7 +202,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onNavigate
                 <div className="w-12 h-12 rounded-2xl bg-[#16A36A]/15 border border-[#16A36A]/30 text-[#16A36A] flex items-center justify-center mx-auto mb-2">
                   <KeyRound className="w-6 h-6" />
                 </div>
-                <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Create New Password</h1>
+                <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Choose a new PipPilotAi password</h1>
                 <p className="text-xs text-[#A9BEB5]">
                   Enter and confirm your new secure password
                 </p>

@@ -132,7 +132,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
 
           {registrationNotice && (
             <div role="status" className="p-3.5 rounded-xl bg-[#16A36A]/10 border border-[#16A36A]/40 text-xs text-[#E8F2EE] relative z-10">
-              Your account was created. Sign in after verifying your email if verification is required.
+              Your PipPilotAi account was created. Sign in after verifying your email if verification is required.
             </div>
           )}
 

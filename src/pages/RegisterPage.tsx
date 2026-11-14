@@ -158,9 +158,9 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-extrabold text-[#E8F2EE]">Check Your Email</h2>
+                <h2 className="text-2xl font-extrabold text-[#E8F2EE]">Check your PipPilotAi email</h2>
                 <p className="text-xs text-[#A9BEB5] leading-relaxed">
-                  We sent a secure verification link to:
+                  Look for the account confirmation email sent to:
                 </p>
                 <div className="p-2.5 rounded-xl bg-[#101B20] border border-[#1A363E] font-mono text-xs font-semibold text-[#16A36A] break-all">
                   {registeredEmail}
@@ -173,7 +173,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   <span>Next Steps:</span>
                 </div>
                 <ol className="list-decimal list-inside space-y-1.5 text-[11px] leading-relaxed">
-                  <li>Open the email from <strong>PipPilotAi (via Supabase)</strong>.</li>
+                  <li>Open the confirmation email for your PipPilotAi account.</li>
                   <li>Click the verification link to confirm your ownership.</li>
                   <li>After confirming your email, return and sign in to your portal.</li>
                 </ol>
@@ -219,7 +219,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
             /* Registration Form */
             <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
               <div className="text-center space-y-1">
-                <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Create Trader Account</h1>
+                <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Create your PipPilotAi account</h1>
                 <p className="text-xs text-[#A9BEB5]">
                   Register for PipPilotAi trading intelligence access
                 </p>

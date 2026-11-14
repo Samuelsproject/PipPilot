@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveRouteFromLocation, WORKSPACE_ROUTES } from "./App";
+import { AUTH_PAGE_TITLES, resolveRouteFromLocation, WORKSPACE_ROUTES } from "./App";
 
 const expectedRoutes = [
   "/app",
@@ -20,6 +20,16 @@ describe("workspace route handling", () => {
 
   it("preserves the original ten routes and registers /app/admin separately", () => {
     expect(WORKSPACE_ROUTES).toEqual(expectedRoutes);
+  });
+
+  it("sets branded browser titles for every authentication route", () => {
+    expect(AUTH_PAGE_TITLES).toEqual({
+      "/login": "Sign in to PipPilotAi",
+      "/register": "Create your PipPilotAi account",
+      "/verify-email": "Verify your PipPilotAi account",
+      "/forgot-password": "Reset your PipPilotAi password",
+      "/reset-password": "Reset your PipPilotAi password",
+    });
   });
 
   it.each(expectedRoutes)("resolves %s to its existing route", (route) => {
