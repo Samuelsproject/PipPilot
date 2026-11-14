@@ -38,7 +38,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onNaviga
     try {
       const res = await sendPasswordReset(email);
 
-      if (res.error && res.error.includes('rate limit')) {
+      if (res.error) {
         setErrorMessage(res.error);
       } else {
         // Generic confirmation to avoid user enumeration
@@ -147,6 +147,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onNaviga
                     type="email"
                     required
                     autoComplete="email"
+                    aria-label="Email address"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="trader@example.com"

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { 
@@ -23,6 +23,7 @@ interface AuthContextType {
   isApproved: boolean;
   isAdmin: boolean;
   isDesignatedAdmin: boolean;
+  isRecoverySession: boolean;
   login: (email: string, password: string) => Promise<AuthResponse<{ user: User; session: Session }>>;
   register: (email: string, password: string) => Promise<AuthResponse<{ user: User | null; session: Session | null }>>;
   logout: () => Promise<void>;
@@ -38,6 +39,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRecoverySession, setIsRecoverySession] = useState(false);
+  const authRevision = useRef(0);
+
+  const clearRecoveryMarker = () => {
+    try {
+      window.sessionStorage.removeItem('pippilot:recovery-session');
+    } catch {
+      // Storage may be unavailable in private browsing; the in-memory state remains authoritative.
+    }
+    setIsRecoverySession(false);
+  };
 
   // Membership access separation:
   // Email verification confirms identity; administrator approval is stored in server-controlled app_metadata.
@@ -60,44 +72,89 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isApproved = membershipStatus === 'active';
   const isAdmin = isDesignatedAdmin && userRole === 'admin';
 
-  const refreshSession = async () => {
+  const refreshSession = useCallback(async () => {
     if (!isSupabaseConfigured) {
+      setSession(null);
+      setUser(null);
       setIsLoading(false);
       return;
     }
 
     try {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+      if (error) throw error;
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      if (currentSession) {
+        try {
+          setIsRecoverySession(window.sessionStorage.getItem('pippilot:recovery-session') === '1');
+        } catch {
+          setIsRecoverySession(false);
+        }
+      } else {
+        clearRecoveryMarker();
+      }
     } catch {
       setSession(null);
       setUser(null);
+      clearRecoveryMarker();
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    refreshSession();
+    if (!isSupabaseConfigured) {
+      setIsLoading(false);
+      return;
+    }
 
-    if (!isSupabaseConfigured) return;
-
+    let mounted = true;
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, newSession: Session | null) => {
+        authRevision.current += 1;
         setSession(newSession);
         setUser(newSession?.user ?? null);
         setIsLoading(false);
 
-        // If the user arrived via a password recovery email link, handle navigation
         if (event === 'PASSWORD_RECOVERY') {
-          // Dispatched when the password recovery token is parsed
+          setIsRecoverySession(true);
+          try {
+            window.sessionStorage.setItem('pippilot:recovery-session', '1');
+          } catch {
+            // Keep the current tab working if browser storage is unavailable.
+          }
           window.dispatchEvent(new CustomEvent('pippilot:password_recovery'));
+        } else if (event === 'SIGNED_OUT' || !newSession) {
+          clearRecoveryMarker();
         }
       }
     );
 
+    const initialRevision = authRevision.current;
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted || authRevision.current !== initialRevision) return;
+      const currentSession = error ? null : data.session;
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      if (currentSession) {
+        try {
+          setIsRecoverySession(window.sessionStorage.getItem('pippilot:recovery-session') === '1');
+        } catch {
+          setIsRecoverySession(false);
+        }
+      }
+      setIsLoading(false);
+    }).catch(() => {
+      if (!mounted || authRevision.current !== initialRevision) return;
+      setSession(null);
+      setUser(null);
+      clearRecoveryMarker();
+      setIsLoading(false);
+    });
+
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -107,6 +164,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.data?.session) {
       setSession(res.data.session);
       setUser(res.data.user);
+      clearRecoveryMarker();
     }
     return res;
   };
@@ -116,9 +174,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    await logoutUser();
-    setSession(null);
-    setUser(null);
+    try {
+      await logoutUser();
+    } finally {
+      setSession(null);
+      setUser(null);
+      clearRecoveryMarker();
+    }
   };
 
   const sendPasswordReset = async (email: string) => {
@@ -126,7 +188,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updatePassword = async (password: string) => {
-    return await updateUserPassword(password);
+    const result = await updateUserPassword(password);
+    if (!result.error) {
+      try {
+        await logoutUser();
+      } finally {
+        setSession(null);
+        setUser(null);
+        clearRecoveryMarker();
+      }
+    }
+    return result;
   };
 
   const resendVerification = async (email: string) => {
@@ -144,6 +216,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isApproved,
     isAdmin,
     isDesignatedAdmin,
+    isRecoverySession,
     login,
     register,
     logout,

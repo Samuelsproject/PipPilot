@@ -26,4 +26,20 @@ describe("workspace route handling", () => {
     window.history.replaceState({}, "", route);
     expect(resolveRouteFromLocation()).toBe(route);
   });
+
+  it("recognizes Supabase recovery callbacks in query strings and fragments", () => {
+    window.history.replaceState({}, "", "/?type=recovery&code=one-time-code");
+    expect(resolveRouteFromLocation()).toBe("/reset-password");
+
+    window.history.replaceState({}, "", "/#access_token=placeholder&type=recovery");
+    expect(resolveRouteFromLocation()).toBe("/reset-password");
+  });
+
+  it("recognizes Supabase email-confirmation callbacks without replacing workspace routes", () => {
+    window.history.replaceState({}, "", "/?type=signup&code=one-time-code");
+    expect(resolveRouteFromLocation()).toBe("/verify-email");
+
+    window.history.replaceState({}, "", "/app/trading");
+    expect(resolveRouteFromLocation()).toBe("/app/trading");
+  });
 });

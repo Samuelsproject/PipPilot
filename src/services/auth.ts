@@ -1,6 +1,8 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { AuthError, Session, User } from '@supabase/supabase-js';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export interface AuthResponse<T = unknown> {
   data: T | null;
   error: string | null;
@@ -13,35 +15,51 @@ export const getRedirectUrl = (path: string = ''): string => {
   return `${origin}${cleanPath}`;
 };
 
+export const validateEmail = (email: string): string | null => {
+  if (!email.trim()) return 'Please enter your email address.';
+  if (!EMAIL_PATTERN.test(email.trim())) return 'Please enter a valid email address.';
+  return null;
+};
+
+export const validatePassword = (password: string): string | null => {
+  if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+    return 'Password must be at least 8 characters long and include an uppercase letter, a number, and a special character.';
+  }
+  return null;
+};
+
 /**
- * Standardize Supabase error messages into clean, actionable guidance
+ * Map provider errors to safe user-facing messages without leaking project details.
  */
 export const formatAuthErrorMessage = (error: AuthError | Error | unknown): string => {
   if (!error) return 'An unexpected error occurred. Please try again.';
-  const message = (error as { message?: string }).message || String(error);
+  const message = ((error as { message?: string }).message || String(error)).toLowerCase();
 
-  if (message.includes('Invalid login credentials')) {
+  if (message.includes('invalid login credentials') || message.includes('invalid_credentials')) {
     return 'Invalid email or password. Please verify your credentials and try again.';
   }
-  if (message.includes('Email not confirmed') || message.includes('email_not_confirmed')) {
+  if (message.includes('email not confirmed') || message.includes('email_not_confirmed')) {
     return 'Your email address has not been verified yet. Please check your inbox and click the verification link.';
   }
-  if (message.includes('User already registered')) {
-    return 'An account with this email address already exists. Please sign in or use password recovery.';
+  if (message.includes('user already registered') || message.includes('already been registered')) {
+    return 'We could not create an account with those details. If you already registered, sign in or reset your password.';
   }
-  if (message.includes('Password should be at least')) {
+  if (message.includes('password should be at least') || message.includes('weak_password')) {
     return 'Password is too short. It must contain at least 8 characters.';
   }
-  if (message.includes('rate limit') || message.includes('over_email_send_rate_limit')) {
+  if (message.includes('rate limit') || message.includes('over_email_send_rate_limit') || message.includes('too many requests')) {
     return 'Too many email requests sent recently. Please wait a few minutes before trying again.';
   }
-  if (message.includes('Token has expired or is invalid')) {
-    return 'This verification or recovery link has expired or has already been used. Please request a new one.';
+  if (message.includes('token has expired') || message.includes('otp_expired') || message.includes('invalid token')) {
+    return 'This link has expired or is invalid. Please request a new one.';
   }
-  if (message.includes('Auth session missing')) {
+  if (message.includes('auth session missing') || message.includes('session_not_found')) {
     return 'Your session has expired. Please request a new password recovery link.';
   }
-  return message;
+  if (message.includes('invalid email') || message.includes('email address')) {
+    return 'Please check the email address and try again.';
+  }
+  return 'We could not complete that request. Please try again. If the problem continues, contact support.';
 };
 
 /**
@@ -51,6 +69,11 @@ export const registerUser = async (
   email: string,
   password: string
 ): Promise<AuthResponse<{ user: User | null; session: Session | null }>> => {
+  const emailError = validateEmail(email);
+  if (emailError) return { data: null, error: emailError };
+  const passwordError = validatePassword(password);
+  if (passwordError) return { data: null, error: passwordError };
+
   if (!isSupabaseConfigured) {
     return {
       data: null,
@@ -76,13 +99,18 @@ export const registerUser = async (
       return { data: null, error: formatAuthErrorMessage(error) };
     }
 
-    // Check if email confirmation is required
-    const requiresVerification = !data.session && !data.user?.email_confirmed_at;
+    // Registration always returns the user to the sign-in flow. If confirmation
+    // is disabled in Supabase, clear the newly created local session as well.
+    if (data.session) {
+      await supabase.auth.signOut({ scope: 'local' });
+    }
+
+    const requiresVerification = !data.user?.email_confirmed_at;
 
     return {
       data: {
         user: data.user,
-        session: data.session,
+        session: null,
       },
       error: null,
       requiresEmailVerification: requiresVerification,
@@ -99,6 +127,10 @@ export const loginUser = async (
   email: string,
   password: string
 ): Promise<AuthResponse<{ user: User; session: Session }>> => {
+  const emailError = validateEmail(email);
+  if (emailError) return { data: null, error: emailError };
+  if (!password) return { data: null, error: 'Please enter your password.' };
+
   if (!isSupabaseConfigured) {
     return {
       data: null,
@@ -149,7 +181,7 @@ export const logoutUser = async (): Promise<AuthResponse<null>> => {
   }
 
   try {
-    const { error } = await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
     if (error) {
       return { data: null, error: formatAuthErrorMessage(error) };
     }
@@ -166,6 +198,9 @@ export const logoutUser = async (): Promise<AuthResponse<null>> => {
 export const requestPasswordReset = async (
   email: string
 ): Promise<AuthResponse<null>> => {
+  const emailError = validateEmail(email);
+  if (emailError) return { data: null, error: emailError };
+
   if (!isSupabaseConfigured) {
     return {
       data: null,
@@ -201,6 +236,9 @@ export const requestPasswordReset = async (
 export const updateUserPassword = async (
   newPassword: string
 ): Promise<AuthResponse<User>> => {
+  const passwordError = validatePassword(newPassword);
+  if (passwordError) return { data: null, error: passwordError };
+
   if (!isSupabaseConfigured) {
     return {
       data: null,
@@ -229,6 +267,9 @@ export const updateUserPassword = async (
 export const resendVerificationEmail = async (
   email: string
 ): Promise<AuthResponse<null>> => {
+  const emailError = validateEmail(email);
+  if (emailError) return { data: null, error: emailError };
+
   if (!isSupabaseConfigured) {
     return {
       data: null,

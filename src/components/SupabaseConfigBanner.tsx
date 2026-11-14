@@ -60,7 +60,14 @@ export const SupabaseConfigBanner: React.FC = () => {
             <div className="p-3 rounded-lg bg-[#152B30] border border-[#1A363E] space-y-2">
               <span className="font-mono text-[#168BFF] font-bold block">2. Configure Redirect URLs</span>
               <p className="text-[#A9BEB5]">
-                In <strong>Authentication → URL Configuration</strong>, set Site URL and add Redirect URLs:
+                In <strong>Authentication → URL Configuration</strong>, set Site URL to the app origin and add these exact Redirect URLs:
+              </p>
+              <ul className="space-y-1 rounded bg-[#101B20] p-2 font-mono text-[10px] text-[#E8F2EE]">
+                <li>{currentOrigin}/verify-email</li>
+                <li>{currentOrigin}/reset-password</li>
+              </ul>
+              <p className="text-[10px] text-[#A9BEB5]">
+                Add the matching production URLs and development preview origin when testing. Avoid adding broad wildcard domains in production.
               </p>
               <div className="flex items-center justify-between p-1.5 rounded bg-[#101B20] font-mono text-[10px] text-[#E8F2EE]">
                 <span className="truncate">{currentOrigin}/**</span>

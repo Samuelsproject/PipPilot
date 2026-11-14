@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Compass, 
   Mail, 
@@ -31,6 +31,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
   const [requiresVerification, setRequiresVerification] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendNotice, setResendNotice] = useState<string | null>(null);
+  const [registrationNotice, setRegistrationNotice] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (window.sessionStorage.getItem('pippilot:registration-complete') === '1') {
+        window.sessionStorage.removeItem('pippilot:registration-complete');
+        setRegistrationNotice(true);
+      }
+    } catch {
+      // The sign-in form remains usable when browser storage is unavailable.
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,11 +124,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
           <div className="absolute bottom-0 left-0 w-56 h-56 bg-[#9560E8]/10 blur-[80px] rounded-full pointer-events-none" />
 
           <div className="text-center space-y-1 relative z-10">
-            <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Sign In to PipPilotAi</h1>
+            <h1 className="text-2xl font-extrabold text-[#E8F2EE]">Sign in to PipPilotAi</h1>
             <p className="text-xs text-[#A9BEB5]">
               Access your trading intelligence workspace
             </p>
           </div>
+
+          {registrationNotice && (
+            <div role="status" className="p-3.5 rounded-xl bg-[#16A36A]/10 border border-[#16A36A]/40 text-xs text-[#E8F2EE] relative z-10">
+              Your account was created. Sign in after verifying your email if verification is required.
+            </div>
+          )}
 
           {/* Error Message */}
           {errorMessage && (
@@ -162,6 +180,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="trader@example.com"
+                  aria-label="Email address"
                   className="w-full pl-10 pr-3.5 py-3 rounded-xl bg-[#101B20] border border-[#1A363E] text-[#E8F2EE] text-sm focus:outline-none focus:border-[#16A36A] transition-colors font-mono"
                 />
               </div>
@@ -190,6 +209,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
+                    aria-label="Password"
                   className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#101B20] border border-[#1A363E] text-[#E8F2EE] text-sm focus:outline-none focus:border-[#16A36A] transition-colors"
                 />
                 <button

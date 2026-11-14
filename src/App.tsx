@@ -47,13 +47,16 @@ function isWorkspaceRoute(route: NavigationRoute): route is WorkspaceRoute {
 export function resolveRouteFromLocation(): NavigationRoute {
   const rawPath = window.location.pathname.replace(/\/+$/, '') || '/';
   const hash = window.location.hash;
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+  const callbackType = searchParams.get('type') ?? hashParams.get('type');
 
   // Detect Supabase recovery link callback in hash
-  if (hash.includes('type=recovery') || rawPath === '/reset-password') {
+  if (callbackType === 'recovery' || hash.includes('type=recovery') || rawPath === '/reset-password') {
     return '/reset-password';
   }
   // Detect email confirmation signup callback in hash
-  if (hash.includes('type=signup') || rawPath === '/verify-email') {
+  if (callbackType === 'signup' || hash.includes('type=signup') || rawPath === '/verify-email') {
     return '/verify-email';
   }
 

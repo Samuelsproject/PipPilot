@@ -19,7 +19,7 @@ interface ResetPasswordPageProps {
 }
 
 export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onNavigate }) => {
-  const { updatePassword, session, isConfigured } = useAuth();
+  const { updatePassword, session, isLoading: authLoading, isRecoverySession } = useAuth();
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -33,16 +33,46 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onNavigate
   const [linkValid, setLinkValid] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Check URL hash for error or access token
-    const hash = window.location.hash;
-    if (hash.includes('error=') || hash.includes('error_description=')) {
+    const search = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const hasCallbackError =
+      search.has('error') || search.has('error_code') || search.has('error_description') ||
+      hash.has('error') || hash.has('error_code') || hash.has('error_description');
+    const hasRecoveryCallback =
+      search.get('type') === 'recovery' ||
+      hash.get('type') === 'recovery' ||
+      search.has('code') ||
+      (hash.has('access_token') && hash.get('type') === 'recovery');
+
+    if (hasCallbackError) {
       setLinkValid(false);
       setErrorMessage('The password recovery link has expired or has already been used. Please request a new link.');
-    } else {
-      // If we have an active session or hash parameters, link is valid
-      setLinkValid(true);
+      return;
     }
-  }, [session]);
+
+    if (isRecoverySession && session) {
+      setLinkValid(true);
+      return;
+    }
+
+    if (hasRecoveryCallback && session) {
+      setLinkValid(true);
+      return;
+    }
+
+    if (!authLoading) {
+      if (!hasRecoveryCallback) {
+        setLinkValid(false);
+        setErrorMessage('Open a valid password recovery link to continue. You can request a new link below.');
+      } else {
+        const timeout = window.setTimeout(() => {
+          setLinkValid(false);
+          setErrorMessage('This password recovery link is expired or invalid. Please request a new one.');
+        }, 3000);
+        return () => window.clearTimeout(timeout);
+      }
+    }
+  }, [authLoading, isRecoverySession, session]);
 
   // Password strength requirements
   const hasMinLength = password.length >= 8;
@@ -159,6 +189,12 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onNavigate
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
+          ) : linkValid === null ? (
+            <div role="status" className="relative z-10 py-8 text-center space-y-3">
+              <RefreshCw className="w-6 h-6 text-[#16A36A] animate-spin mx-auto" />
+              <p className="text-sm font-semibold text-[#E8F2EE]">Checking recovery link</p>
+              <p className="text-xs text-[#A9BEB5]">Verifying your secure sign-in session before allowing a password change.</p>
+            </div>
           ) : (
             /* Set New Password Form */
             <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
@@ -190,6 +226,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onNavigate
                     type={showPassword ? 'text' : 'password'}
                     required
                     autoComplete="new-password"
+                    aria-label="New password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter new strong password"
@@ -199,6 +236,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onNavigate
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#A9BEB5] hover:text-[#E8F2EE] p-1"
+                    aria-label={showPassword ? 'Hide new password' : 'Show new password'}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -233,6 +271,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onNavigate
                     type={showConfirmPassword ? 'text' : 'password'}
                     required
                     autoComplete="new-password"
+                    aria-label="Confirm new password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm new password"
@@ -242,6 +281,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onNavigate
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#A9BEB5] hover:text-[#E8F2EE] p-1"
+                    aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
                   >
                     {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>

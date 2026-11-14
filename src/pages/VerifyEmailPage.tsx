@@ -28,19 +28,26 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ onNavigate }) 
   const [hashStatus, setHashStatus] = useState<'success' | 'error' | 'pending'>('pending');
 
   useEffect(() => {
-    const hash = window.location.hash;
-    const search = window.location.search;
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const search = new URLSearchParams(window.location.search);
 
-    if (hash.includes('error=') || search.includes('error=')) {
+    if (
+      hash.has('error') || hash.has('error_code') || hash.has('error_description') ||
+      search.has('error') || search.has('error_code') || search.has('error_description')
+    ) {
       setHashStatus('error');
       setErrorMessage('The email verification link has expired or is invalid. Please request a new verification email.');
-    } else if (emailVerified || hash.includes('type=signup') || hash.includes('access_token=')) {
+    } else if (emailVerified) {
       setHashStatus('success');
-      refreshSession();
     } else {
       setHashStatus('pending');
+      if (search.has('code') || search.get('type') === 'signup' || hash.get('type') === 'signup' || hash.has('access_token')) {
+        // Supabase processes the callback asynchronously; only a confirmed user
+        // session can move this screen into the success state.
+        void refreshSession();
+      }
     }
-  }, [emailVerified]);
+  }, [emailVerified, refreshSession]);
 
   const handleResend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +131,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ onNavigate }) 
                   <span>Onboarding Status: Step 2 of 5 Complete</span>
                 </div>
                 <p className="text-[11px] leading-relaxed">
-                  Now that your email is verified, sign in to your dashboard to review initial platform tools and request cohort membership approval.
+                  Email verification confirms your identity only. Sign in to view your account status; administrator approval is still required for protected membership access.
                 </p>
               </div>
 

@@ -26,7 +26,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   onOpenPrivacy, 
   onOpenTerms 
 }) => {
-  const { register, resendVerification, isConfigured } = useAuth();
+  const { register, resendVerification } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -79,8 +79,13 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
       if (res.error) {
         setErrorMessage(res.error);
       } else {
-        // Successful registration: show verification prompt
-        setRegisteredEmail(email.trim().toLowerCase());
+        // Continue directly to sign-in and show a generic next-step notice there.
+        try {
+          window.sessionStorage.setItem('pippilot:registration-complete', '1');
+        } catch {
+          // Navigation still works even if browser storage is unavailable.
+        }
+        onNavigate('/login');
       }
     } catch {
       setErrorMessage('An unexpected error occurred during registration. Please try again.');
@@ -239,6 +244,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                     type="email"
                     required
                     autoComplete="email"
+                    aria-label="Email address"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="trader@example.com"
@@ -258,6 +264,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                     type={showPassword ? 'text' : 'password'}
                     required
                     autoComplete="new-password"
+                    aria-label="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Create a strong password"
@@ -306,6 +313,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                     type={showConfirmPassword ? 'text' : 'password'}
                     required
                     autoComplete="new-password"
+                    aria-label="Confirm password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Repeat your password"
