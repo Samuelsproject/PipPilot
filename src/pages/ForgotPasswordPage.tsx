@@ -101,7 +101,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onNaviga
               <div className="p-4 rounded-xl bg-[#101B20]/80 border border-[#1A363E] text-left space-y-2 text-xs text-[#A9BEB5]">
                 <p className="text-[11px] leading-relaxed">
                   • Click the recovery link in the email to set a new password.<br />
-                  • The link expires in 60 minutes for security.<br />
+                  • Recovery links are single-use and expire according to your project’s Supabase security settings.<br />
                   • If you do not see the message, verify your spam folder or check spelling.
                 </p>
               </div>
