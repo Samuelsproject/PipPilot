@@ -7,6 +7,7 @@
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "build:production": "env -u SUPABASE_SERVICE_ROLE_KEY pnpm run build && env -u SUPABASE_SERVICE_ROLE_KEY pnpm --filter @workspace/api-server run build",
+    "typecheck:libs": "tsc -b lib/api-zod/tsconfig.json lib/db/tsconfig.json lib/api-client-react/tsconfig.json",
     "preview": "vite preview",
     "test": "vitest run",
     "clean": "rm -rf dist server.js",
