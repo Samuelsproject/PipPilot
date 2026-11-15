@@ -17,7 +17,7 @@ describe("parseMarketCandlesCsv", () => {
       "Date,Time,Open,High,Low,Close\n2026-01-01,12:00:00,100,103,99,102",
     );
     expect(result.candles[0].timestamp).toBe(Date.parse("2026-01-01T12:00:00"));
-    expect(result.warnings).toContain("At least 20 candles are required for structural analysis.");
+    expect(result.warnings).toContain("At least 50 closed candles are required for structural analysis.");
   });
 
   it.each([

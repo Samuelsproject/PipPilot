@@ -5,8 +5,6 @@ export interface ParsedMarketCsv {
   warnings: string[];
 }
 
-const REQUIRED_HEADERS = ["timestamp", "open", "high", "low", "close"] as const;
-
 function parseTimestamp(value: string, rowNumber: number): number {
   const numeric = Number(value);
   if (value.trim() !== "" && Number.isFinite(numeric)) {
@@ -90,8 +88,8 @@ export function parseMarketCandlesCsv(csv: string): ParsedMarketCsv {
   if (candles.length > 200) {
     throw new Error(`CSV has ${candles.length} candles; the analysis accepts at most 200 per timeframe.`);
   }
-  if (candles.length < 20) {
-    warnings.push("At least 20 candles are required for structural analysis.");
+  if (candles.length < 50) {
+    warnings.push("At least 50 closed candles are required for structural analysis.");
   }
   return { candles, warnings };
 }

@@ -43,7 +43,7 @@ export function createWorkspaceRouter(
   router.post("/workspace/trading/analyze", (req, res): void => {
     const parsed = AnalyzeTradingBody.safeParse(req.body);
     if (!parsed.success) {
-      req.log.warn({ errors: parsed.error.issues.length }, "Rejected invalid trading analysis input");
+      req.log?.warn({ errors: parsed.error.issues.length }, "Rejected invalid trading analysis input");
       res.status(400).json({ error: "Symbol or candle data is invalid." });
       return;
     }

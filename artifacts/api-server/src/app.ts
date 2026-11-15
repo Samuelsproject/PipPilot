@@ -96,6 +96,9 @@ export function createApp(
       maxAge: 600,
     })(req, res, next);
   });
+  // Four bounded OHLC series may exceed the default 100 KB parser limit.
+  // Keep the existing limit unchanged for every other application endpoint.
+  app.use("/api/workspace/trading/analyze", express.json({ limit: "192kb" }));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
