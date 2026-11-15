@@ -19,6 +19,37 @@ export const MembershipStatus = {
   expired: 'expired',
 } as const;
 
+export type WorkspaceAccessResponseMembershipStatus = typeof WorkspaceAccessResponseMembershipStatus[keyof typeof WorkspaceAccessResponseMembershipStatus];
+
+
+export const WorkspaceAccessResponseMembershipStatus = {
+  active: 'active',
+} as const;
+
+export interface WorkspaceAccessResponse {
+  userId: string;
+  membershipStatus: WorkspaceAccessResponseMembershipStatus;
+}
+
+export type MembershipAccessErrorResponseCode = typeof MembershipAccessErrorResponseCode[keyof typeof MembershipAccessErrorResponseCode];
+
+
+export const MembershipAccessErrorResponseCode = {
+  AUTH_REQUIRED: 'AUTH_REQUIRED',
+  INVALID_TOKEN: 'INVALID_TOKEN',
+  EMAIL_UNVERIFIED: 'EMAIL_UNVERIFIED',
+  MEMBERSHIP_PENDING: 'MEMBERSHIP_PENDING',
+  MEMBERSHIP_SUSPENDED: 'MEMBERSHIP_SUSPENDED',
+  MEMBERSHIP_REVOKED: 'MEMBERSHIP_REVOKED',
+  MEMBERSHIP_CHECK_UNAVAILABLE: 'MEMBERSHIP_CHECK_UNAVAILABLE',
+} as const;
+
+export interface MembershipAccessErrorResponse {
+  code: MembershipAccessErrorResponseCode;
+  error: string;
+  membershipStatus?: MembershipStatus;
+}
+
 export type AdminMemberRole = typeof AdminMemberRole[keyof typeof AdminMemberRole];
 
 

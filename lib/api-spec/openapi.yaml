@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: admin
     description: Administrator-only membership operations
+  - name: workspace
+    description: Approved-member workspace access
 paths:
   /healthz:
     get:
@@ -26,6 +28,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /workspace/access:
+    get:
+      operationId: getWorkspaceAccess
+      tags: [workspace]
+      summary: Verify current workspace membership access
+      description: Verifies the current user's membership against server-managed Supabase metadata.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Approved workspace access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAccessResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
+        "403":
+          description: Email verification or approved membership is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
+        "503":
+          description: Membership authorization is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
   /admin/initialize:
     post:
       operationId: initializeAdmin
@@ -228,6 +263,34 @@ components:
     MembershipStatus:
       type: string
       enum: [pending, active, suspended, expired]
+    WorkspaceAccessResponse:
+      type: object
+      required: [userId, membershipStatus]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        membershipStatus:
+          type: string
+          enum: [active]
+    MembershipAccessErrorResponse:
+      type: object
+      required: [code, error]
+      properties:
+        code:
+          type: string
+          enum:
+            - AUTH_REQUIRED
+            - INVALID_TOKEN
+            - EMAIL_UNVERIFIED
+            - MEMBERSHIP_PENDING
+            - MEMBERSHIP_SUSPENDED
+            - MEMBERSHIP_REVOKED
+            - MEMBERSHIP_CHECK_UNAVAILABLE
+        error:
+          type: string
+        membershipStatus:
+          $ref: "#/components/schemas/MembershipStatus"
     AdminMember:
       type: object
       required: [id, email, emailVerified, role, membershipStatus, createdAt, lastSignInAt]

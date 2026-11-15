@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
+import { useGetWorkspaceAccess } from '@workspace/api-client-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { 
   loginUser, 
@@ -19,6 +20,9 @@ interface AuthContextType {
   isConfigured: boolean;
   emailVerified: boolean;
   membershipStatus: MembershipApprovalStatus;
+  membershipAccessVerified: boolean;
+  membershipAccessLoading: boolean;
+  membershipAccessError: string | null;
   userRole: UserRole;
   isApproved: boolean;
   isAdmin: boolean;
@@ -35,11 +39,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function isMembershipApprovalStatus(value: unknown): value is MembershipApprovalStatus {
+  return value === 'pending' || value === 'active' || value === 'suspended' || value === 'expired';
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRecoverySession, setIsRecoverySession] = useState(false);
+  const [membershipCheckRevision, setMembershipCheckRevision] = useState(0);
   const authRevision = useRef(0);
 
   const clearRecoveryMarker = () => {
@@ -54,22 +63,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Membership access separation:
   // Email verification confirms identity; administrator approval is stored in server-controlled app_metadata.
   // Pending users must not gain premium trading access; admin role remains separate from ordinary users.
-  const emailVerified = Boolean(user && user.email_confirmed_at);
+  const membershipRequest = useMemo(() => ({
+    headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+  }), [session?.access_token]);
+  const membershipQuery = useGetWorkspaceAccess({
+    request: membershipRequest,
+    query: {
+      enabled: Boolean(user && session?.access_token),
+      queryKey: ['/api/workspace/access', user?.id, membershipCheckRevision],
+      staleTime: 0,
+      refetchInterval: 30_000,
+      refetchOnWindowFocus: true,
+      retry: false,
+    },
+  });
+  const membershipQueryError = membershipQuery.error as {
+    status?: number;
+    data?: { code?: unknown; membershipStatus?: unknown; error?: unknown };
+  } | null;
+  const serverReportsUnverifiedEmail =
+    membershipQueryError?.status === 403 &&
+    membershipQueryError.data?.code === 'EMAIL_UNVERIFIED';
+  const rejectedMembershipStatus =
+    membershipQueryError?.status === 403 &&
+    (
+      membershipQueryError.data?.code === 'MEMBERSHIP_PENDING' ||
+      membershipQueryError.data?.code === 'MEMBERSHIP_SUSPENDED' ||
+      membershipQueryError.data?.code === 'MEMBERSHIP_REVOKED'
+    ) &&
+    isMembershipApprovalStatus(membershipQueryError.data?.membershipStatus)
+      ? membershipQueryError.data.membershipStatus
+      : undefined;
+  const emailVerified = Boolean(user && user.email_confirmed_at) && !serverReportsUnverifiedEmail;
   const isDesignatedAdmin = Boolean(
     user?.email?.trim().toLowerCase() === 'pippilotaiadmin@gmail.com' && emailVerified,
   );
+  const membershipAccessVerified = Boolean(
+    user &&
+      session?.access_token &&
+      ((!membershipQuery.error && membershipQuery.isSuccess) || rejectedMembershipStatus),
+  );
+  const membershipAccessLoading = Boolean(
+    user && session?.access_token && !membershipAccessVerified && !membershipQuery.error,
+  );
+  const membershipAccessError = membershipAccessVerified
+    ? null
+    : typeof membershipQueryError?.data?.error === 'string'
+      ? membershipQueryError.data.error
+      : membershipQueryError?.status === 401
+        ? 'Your sign-in session could not be verified. Sign in again to check membership.'
+        : membershipQuery.error
+          ? 'Membership access could not be verified. Please retry.'
+          : null;
+
   const userRole: UserRole = useMemo(() => {
     if (isDesignatedAdmin && user?.app_metadata?.role === 'admin') return 'admin';
     return 'trader';
   }, [user, isDesignatedAdmin]);
 
   const membershipStatus: MembershipApprovalStatus = useMemo(() => {
+    if (rejectedMembershipStatus) return rejectedMembershipStatus;
+    if (!membershipQuery.error && membershipQuery.data?.membershipStatus) {
+      return membershipQuery.data.membershipStatus;
+    }
     const value = user?.app_metadata?.membership_status;
-    if (value === 'active' || value === 'suspended' || value === 'expired') return value;
+    if (isMembershipApprovalStatus(value)) return value;
     return 'pending';
-  }, [user, emailVerified]);
+  }, [user, membershipQuery.data, membershipQuery.error, rejectedMembershipStatus]);
 
-  const isApproved = membershipStatus === 'active';
+  const isApproved = membershipAccessVerified && membershipStatus === 'active';
   const isAdmin = isDesignatedAdmin && userRole === 'admin';
 
   const refreshSession = useCallback(async () => {
@@ -85,6 +147,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      setMembershipCheckRevision((revision) => revision + 1);
       if (currentSession) {
         try {
           setIsRecoverySession(window.sessionStorage.getItem('pippilot:recovery-session') === '1');
@@ -97,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       setSession(null);
       setUser(null);
+      setMembershipCheckRevision((revision) => revision + 1);
       clearRecoveryMarker();
     } finally {
       setIsLoading(false);
@@ -115,6 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authRevision.current += 1;
         setSession(newSession);
         setUser(newSession?.user ?? null);
+        setMembershipCheckRevision((revision) => revision + 1);
         setIsLoading(false);
 
         if (event === 'PASSWORD_RECOVERY') {
@@ -137,6 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentSession = error ? null : data.session;
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      setMembershipCheckRevision((revision) => revision + 1);
       if (currentSession) {
         try {
           setIsRecoverySession(window.sessionStorage.getItem('pippilot:recovery-session') === '1');
@@ -149,6 +215,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!mounted || authRevision.current !== initialRevision) return;
       setSession(null);
       setUser(null);
+      setMembershipCheckRevision((revision) => revision + 1);
       clearRecoveryMarker();
       setIsLoading(false);
     });
@@ -164,6 +231,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.data?.session) {
       setSession(res.data.session);
       setUser(res.data.user);
+      setMembershipCheckRevision((revision) => revision + 1);
       clearRecoveryMarker();
     }
     return res;
@@ -179,6 +247,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setSession(null);
       setUser(null);
+      setMembershipCheckRevision((revision) => revision + 1);
       clearRecoveryMarker();
     }
   };
@@ -195,6 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         setSession(null);
         setUser(null);
+        setMembershipCheckRevision((revision) => revision + 1);
         clearRecoveryMarker();
       }
     }
@@ -212,6 +282,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isConfigured: isSupabaseConfigured,
     emailVerified,
     membershipStatus,
+    membershipAccessVerified,
+    membershipAccessLoading,
+    membershipAccessError,
     userRole,
     isApproved,
     isAdmin,

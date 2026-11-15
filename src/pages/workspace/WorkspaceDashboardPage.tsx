@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { NavigationRoute } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { membershipStatusLabel } from '../../lib/membership-status';
 import {
   CORE_ECONOMIC_EVENTS,
   MAX_SHARED_SIGNALS,
@@ -29,7 +30,16 @@ interface WorkspaceDashboardPageProps {
 export const WorkspaceDashboardPage: React.FC<WorkspaceDashboardPageProps> = ({
   onNavigate,
 }) => {
-  const { user, emailVerified, membershipStatus, userRole, isApproved } = useAuth();
+  const {
+    user,
+    emailVerified,
+    membershipStatus,
+    membershipAccessVerified,
+    membershipAccessLoading,
+    membershipAccessError,
+    userRole,
+    isApproved,
+  } = useAuth();
   const recentSignals = SHARED_PLATFORM_SIGNALS.slice(0, 3);
 
   return (
@@ -53,7 +63,15 @@ export const WorkspaceDashboardPage: React.FC<WorkspaceDashboardPageProps> = ({
                   : 'bg-[#E69A36]/15 text-[#E69A36] border-[#E69A36]/35'
               }`}
             >
-              {isApproved ? 'APPROVED MEMBER' : 'PENDING ADMIN APPROVAL'}
+              {isApproved
+                ? 'APPROVED MEMBER'
+                : !membershipAccessVerified
+                  ? membershipAccessLoading
+                    ? 'VERIFYING MEMBERSHIP'
+                    : 'MEMBERSHIP CHECK UNAVAILABLE'
+                  : membershipStatus === 'pending'
+                    ? 'PENDING ADMIN APPROVAL'
+                    : `ACCESS ${membershipStatusLabel(membershipStatus).toUpperCase()}`}
             </span>
           </div>
 
@@ -71,14 +89,22 @@ export const WorkspaceDashboardPage: React.FC<WorkspaceDashboardPageProps> = ({
             <div className="p-3 rounded-xl bg-[#101B20] border border-[#1A363E]">
               <span className="text-[10px] text-[#A9BEB5] block">Membership Tier</span>
               <span className="font-bold text-[#168BFF] block mt-0.5">
-                {membershipStatus === 'active'
-                  ? 'Cohort Active'
-                  : membershipStatus === 'pending'
-                    ? 'Step 3: Pending'
-                    : `Access ${membershipStatus}`}
+                {!membershipAccessVerified
+                  ? membershipAccessLoading
+                    ? 'Verifying membership'
+                    : 'Status unavailable'
+                  : membershipStatus === 'active'
+                    ? 'Cohort Active'
+                    : membershipStatus === 'pending'
+                      ? 'Step 3: Pending approval'
+                      : `Access ${membershipStatusLabel(membershipStatus)}`}
               </span>
               <span className="text-[10px] text-[#A9BEB5] block mt-1">
-                {isApproved ? 'Full workspace unlocked' : 'Trading modules locked'}
+                {isApproved
+                  ? 'Full workspace unlocked'
+                  : membershipAccessVerified
+                    ? 'Trading modules locked'
+                    : membershipAccessError ?? 'Protected features stay locked until verified'}
               </span>
             </div>
 

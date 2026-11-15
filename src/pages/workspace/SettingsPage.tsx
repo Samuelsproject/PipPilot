@@ -3,13 +3,23 @@ import { Bell, CheckCircle2, KeyRound, LogOut, Shield, Sliders, User } from 'luc
 import { NavigationRoute } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { AssetSymbol, TimeframeOption } from '../../data/workspaceData';
+import { membershipStatusLabel } from '../../lib/membership-status';
 
 interface SettingsPageProps {
   onNavigate: (route: NavigationRoute) => void;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
-  const { user, emailVerified, membershipStatus, userRole, isAdmin, logout } = useAuth();
+  const {
+    user,
+    emailVerified,
+    membershipStatus,
+    membershipAccessVerified,
+    membershipAccessLoading,
+    userRole,
+    isAdmin,
+    logout,
+  } = useAuth();
 
   const [defaultPair, setDefaultPair] = useState<AssetSymbol>('XAU/USD');
   const [defaultTimeframe, setDefaultTimeframe] = useState<TimeframeOption>('M15');
@@ -62,9 +72,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
               <div className="p-3 rounded-xl bg-[#101B20] border border-[#1A363E] flex justify-between">
                 <span className="text-[#A9BEB5]">Membership Status</span>
                 <span className={membershipStatus === 'active' ? 'text-[#16A36A] font-bold' : 'text-[#E69A36] font-bold'}>
-                  {membershipStatus === 'pending'
-                    ? 'Pending admin approval'
-                    : membershipStatus.charAt(0).toUpperCase() + membershipStatus.slice(1)}
+                  {!membershipAccessVerified
+                    ? membershipAccessLoading
+                      ? 'Checking membership'
+                      : 'Unable to verify'
+                    : membershipStatus === 'pending'
+                      ? 'Pending admin approval'
+                      : membershipStatusLabel(membershipStatus)}
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-[#101B20] border border-[#1A363E] flex justify-between">

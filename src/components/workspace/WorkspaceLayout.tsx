@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { NavigationRoute, WorkspaceRoute } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { membershipStatusLabel } from '../../lib/membership-status';
 
 export interface WorkspaceNavItem {
   label: string;
@@ -63,7 +64,17 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
   onNavigate,
   children,
 }) => {
-  const { user, emailVerified, membershipStatus, userRole, isApproved, isDesignatedAdmin, logout } = useAuth();
+  const {
+    user,
+    emailVerified,
+    membershipStatus,
+    membershipAccessVerified,
+    membershipAccessLoading,
+    userRole,
+    isApproved,
+    isDesignatedAdmin,
+    logout,
+  } = useAuth();
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -272,7 +283,11 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
                     : 'bg-[#9560E8]/20 text-[#E8F2EE] border-[#9560E8]/35'
                 }`}
               >
-                {`Membership: ${membershipStatus.replace('_', ' ')}`}
+                {`Membership: ${membershipAccessVerified
+                  ? membershipStatusLabel(membershipStatus)
+                  : membershipAccessLoading
+                    ? 'Checking'
+                    : 'Unavailable'}`}
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#101B20] border border-[#1A363E] text-[#168BFF] uppercase">
                 {userRole}

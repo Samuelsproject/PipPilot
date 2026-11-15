@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { NavigationRoute } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { membershipStatusLabel } from '../../lib/membership-status';
 
 interface WorkspaceAccessGateProps {
   mode: 'unauthenticated' | 'unverified';
@@ -170,16 +171,29 @@ export const PendingApprovalGuard: React.FC<PendingApprovalGuardProps> = ({
   onNavigate,
 }) => {
   const { user, userRole, membershipStatus } = useAuth();
+  const statusLabel = membershipStatusLabel(membershipStatus);
+  const membershipCopy = membershipStatus === 'pending'
+    ? {
+        title: `${featureName} Requires Approved Membership`,
+        description: 'Your verified account is waiting for administrator approval. Protected workspace features stay locked until membership is approved.',
+      }
+    : membershipStatus === 'suspended'
+      ? {
+          title: `${featureName} Access Is Suspended`,
+          description: 'Your membership is suspended, so protected workspace features are unavailable. Contact support if you believe this status is incorrect.',
+        }
+      : {
+          title: `${featureName} Access Has Been Revoked`,
+          description: 'Your membership has expired or been revoked, so protected workspace features are unavailable. Contact support to review your access.',
+        };
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-2">
-      <div className="bg-[#152B30] border border-[#9560E8]/40 rounded-2xl p-6 sm:p-8 purple-glow-box space-y-5">
+      <div data-testid="membership-denial" className="bg-[#152B30] border border-[#9560E8]/40 rounded-2xl p-6 sm:p-8 purple-glow-box space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1A363E] pb-4">
           <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-[#E69A36]/15 text-[#E69A36] border border-[#E69A36]/30">
             <Clock className="w-3.5 h-3.5" />
-            {membershipStatus === 'pending'
-              ? 'MEMBERSHIP PENDING APPROVAL'
-              : `MEMBERSHIP ${membershipStatus.toUpperCase()}`}
+              {`MEMBERSHIP ${statusLabel.toUpperCase()}`}
           </span>
           <span className="text-[11px] font-mono text-[#A9BEB5]">
             Role: <strong className="text-[#E8F2EE] uppercase">{userRole}</strong>
@@ -188,12 +202,11 @@ export const PendingApprovalGuard: React.FC<PendingApprovalGuardProps> = ({
 
         <div className="space-y-2">
           <h2 className="text-xl sm:text-2xl font-extrabold text-[#E8F2EE] purple-glow-text">
-            {membershipStatus === 'pending'
-              ? `${featureName} Requires Approved Membership`
-              : `${featureName} Access Is ${membershipStatus}`}
+            {membershipCopy.title}
           </h2>
           <p className="text-xs sm:text-sm text-[#A9BEB5] leading-relaxed">
-            Your email (<span className="font-mono text-[#E8F2EE]">{user?.email}</span>) is verified. Protected trading modules require active administrator-approved membership. Contact support if you believe this status is incorrect.
+            {membershipCopy.description}{' '}
+            <span className="font-mono text-[#E8F2EE]">{user?.email}</span>
           </p>
         </div>
 
@@ -237,3 +250,41 @@ export const PendingApprovalGuard: React.FC<PendingApprovalGuardProps> = ({
     </div>
   );
 };
+
+interface MembershipVerificationGateProps {
+  error: string | null;
+  isLoading: boolean;
+  onRetry: () => void;
+}
+
+export const MembershipVerificationGate: React.FC<MembershipVerificationGateProps> = ({
+  error,
+  isLoading,
+  onRetry,
+}) => (
+  <section
+    className="mx-auto max-w-2xl rounded-2xl border border-[#E69A36]/35 bg-[#152B30] p-6"
+    aria-live="polite"
+    data-testid="membership-verification-required"
+  >
+    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#E69A36]">
+      Membership check
+    </p>
+    <h2 className="mt-2 text-xl font-bold text-[#E8F2EE]">
+      {isLoading ? 'Verifying your membership' : 'Unable to verify membership'}
+    </h2>
+    <p className="mt-2 text-sm text-[#A9BEB5]">
+      {error ?? 'Protected workspace features remain locked until current membership is verified.'}
+    </p>
+    {!isLoading && (
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-4 rounded-xl bg-[#16A36A] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#148f5d]"
+        data-testid="button-retry-membership-check"
+      >
+        Retry membership check
+      </button>
+    )}
+  </section>
+);

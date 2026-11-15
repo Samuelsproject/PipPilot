@@ -18,6 +18,16 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * Verifies the current user's membership against server-managed Supabase metadata.
+ * @summary Verify current workspace membership access
+ */
+export const GetWorkspaceAccessResponse = zod.object({
+  "userId": zod.string().uuid(),
+  "membershipStatus": zod.enum(['active'])
+})
+
+
+/**
  * Explicitly initialize server-managed admin metadata for the authenticated designated administrator. The account identity and metadata are derived server-side.
  * @summary Initialize the verified designated administrator
  */

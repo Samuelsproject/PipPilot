@@ -29,9 +29,11 @@ import type {
   AdminMember,
   AdminUsersResponse,
   HealthStatus,
+  MembershipAccessErrorResponse,
   MembershipUpdateInput,
   MembershipUpdateResponse,
-  TerminateSessionsResponse
+  TerminateSessionsResponse,
+  WorkspaceAccessResponse
 } from './api.schemas.ts';
 
 import { customFetch } from '../custom-fetch.ts';
@@ -151,6 +153,108 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetWorkspaceAccessUrl = () => {
+
+
+
+
+  return `/api/workspace/access`
+}
+
+/**
+ * Verifies the current user's membership against server-managed Supabase metadata.
+ * @summary Verify current workspace membership access
+ */
+export const getWorkspaceAccess = async ( options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceAccessResponse> => {
+
+  return customFetch<WorkspaceAccessResponse>(getGetWorkspaceAccessUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWorkspaceAccessQueryKey = () => {
+    return [
+    `/api/workspace/access`
+    ] as const;
+    }
+
+
+export const getGetWorkspaceAccessQueryOptions = <TData = Awaited<ReturnType<typeof getWorkspaceAccess>>, TError = ErrorType<MembershipAccessErrorResponse>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAccess>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWorkspaceAccessQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkspaceAccess>>> = ({ signal }) => getWorkspaceAccess({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAccess>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetWorkspaceAccessQueryResult = NonNullable<Awaited<ReturnType<typeof getWorkspaceAccess>>>
+export type GetWorkspaceAccessQueryError = ErrorType<MembershipAccessErrorResponse>
+
+
+export function useGetWorkspaceAccess<TData = Awaited<ReturnType<typeof getWorkspaceAccess>>, TError = ErrorType<MembershipAccessErrorResponse>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAccess>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceAccess>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceAccess>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceAccess<TData = Awaited<ReturnType<typeof getWorkspaceAccess>>, TError = ErrorType<MembershipAccessErrorResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAccess>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceAccess>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceAccess>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceAccess<TData = Awaited<ReturnType<typeof getWorkspaceAccess>>, TError = ErrorType<MembershipAccessErrorResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAccess>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Verify current workspace membership access
+ */
+
+export function useGetWorkspaceAccess<TData = Awaited<ReturnType<typeof getWorkspaceAccess>>, TError = ErrorType<MembershipAccessErrorResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAccess>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetWorkspaceAccessQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

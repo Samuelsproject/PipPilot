@@ -7,6 +7,7 @@ import {
   WorkspaceLayout,
 } from './workspace/WorkspaceLayout';
 import {
+  MembershipVerificationGate,
   PendingApprovalGuard,
   WorkspaceAccessGate,
 } from './workspace/WorkspaceAccessGate';
@@ -31,7 +32,16 @@ export const DashboardPreviewPage: React.FC<DashboardPreviewPageProps> = ({
   currentRoute = '/app',
   onNavigate,
 }) => {
-  const { user, isLoading, emailVerified, isApproved } = useAuth();
+  const {
+    user,
+    isLoading,
+    emailVerified,
+    isApproved,
+    membershipAccessVerified,
+    membershipAccessLoading,
+    membershipAccessError,
+    refreshSession,
+  } = useAuth();
 
   if (isLoading) {
     return (
@@ -71,7 +81,17 @@ export const DashboardPreviewPage: React.FC<DashboardPreviewPageProps> = ({
     WORKSPACE_NAV_ITEMS[0];
 
   const renderWorkspacePage = () => {
-    // Pending users must not gain premium/protected trading access
+    if (activeNav.requiresApproval && !membershipAccessVerified) {
+      return (
+        <MembershipVerificationGate
+          error={membershipAccessError}
+          isLoading={membershipAccessLoading}
+          onRetry={() => void refreshSession()}
+        />
+      );
+    }
+
+    // Only a server-verified active membership can open protected features.
     if (activeNav.requiresApproval && !isApproved) {
       return (
         <PendingApprovalGuard
