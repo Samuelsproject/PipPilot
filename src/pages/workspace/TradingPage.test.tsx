@@ -76,7 +76,7 @@ describe("TradingPage", () => {
 
   it("states that live data is unavailable and does not show the previous fictional setup", () => {
     render(<TradingPage />);
-    expect(screen.getByText("Data provider unavailable")).toBeTruthy();
+    expect(screen.getByText("No live data provider")).toBeTruthy();
     expect(screen.getByText(/no live or delayed market feed is connected/i)).toBeTruthy();
     expect(screen.queryByText("Sample #842")).toBeNull();
     expect(screen.queryByText("2,184.30")).toBeNull();
@@ -91,7 +91,7 @@ describe("TradingPage", () => {
     Object.defineProperty(file, "text", { value: async () => csv });
     fireEvent.change(input, { target: { files: [file] } });
 
-    expect(await screen.findByText(/1 candles · broker-30m\.csv/)).toBeTruthy();
+    expect(await screen.findByText(/1 historical candles · broker-30m\.csv/)).toBeTruthy();
     fireEvent.click(screen.getByTestId("button-analyze-market"));
 
     await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));

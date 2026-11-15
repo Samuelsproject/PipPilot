@@ -19,7 +19,7 @@ function candlesFor(
 ): TradingCandle[] {
   const sign = direction === "bullish" ? 1 : -1;
   return Array.from({ length: count }, (_, index) => {
-    const center = 1_000 + sign * index * 0.35 + Math.sin(index * 1.3) * 0.8;
+    const center = 1_000 + sign * (index * 0.35 + Math.sin(index * 1.3) * 0.8);
     const close = center;
     const open = close - sign * 0.08;
     return {
@@ -76,7 +76,7 @@ function completeInput(
       "1D": candlesFor("1D", direction, 64, origin),
       "4H": candlesFor("4H", direction, 64, origin),
       "1H": candlesFor("1H", direction, 64, origin),
-      "30M": addTrigger(candlesFor("30M", direction, 64, origin), direction),
+      "30M": addTrigger(candlesFor("30M", direction, 64, origin - INTERVAL["30M"]), direction),
     },
   };
 }
@@ -120,7 +120,11 @@ describe("data-driven multi-timeframe trading analysis", () => {
     expect(result.signal.setupTimeframe).toBe("30M");
     expect(result.signal.stopLoss).toBeLessThan(result.signal.entryPrice!);
     expect(result.signal.targets).toHaveLength(3);
-    expect(result.signal.targets.map((target) => target.riskReward)).toEqual([1.5, 2, 3]);
+    expect(result.signal.targets.map((target) => target.riskReward)).toEqual([2, 3, 4]);
+    for (const target of result.signal.targets) {
+      expect((target.price - result.signal.entryPrice!) /
+        (result.signal.entryPrice! - result.signal.stopLoss!)).toBeCloseTo(target.riskReward);
+    }
     expect(result.signal.evidence.some((item) => item.includes("LIQUIDITY_SWEEP") || item.includes("CRT_INTRADAY"))).toBe(true);
   });
 
@@ -141,6 +145,19 @@ describe("data-driven multi-timeframe trading analysis", () => {
     expect(result.higherTimeframeBias).toBe("neutral");
     expect(result.conflicts.some((conflict) => conflict.includes("Daily bias"))).toBe(true);
     expect(result.signal.confidence).toBeLessThan(50);
+  });
+
+  it("does not invent 4H confirmation when it is neutral and reduces confidence", () => {
+    const input = completeInput("BTCUSD");
+    input.timeframes["4H"] = input.timeframes["4H"]!.map((candle) => ({
+      ...candle, open: 1000, high: 1001, low: 999, close: 1000,
+    }));
+    const result = analyzeTrading(input, NOW);
+    const aligned = analyzeTrading(completeInput("BTCUSD"), NOW);
+    expect(result.signal.decision).toBe("BUY");
+    expect(result.timeframes.find((entry) => entry.timeframe === "4H")?.bias).toBe("neutral");
+    expect(result.signal.evidence.join(" ")).toMatch(/neutral, not confirming/);
+    expect(result.signal.confidence).toBeLessThan(aligned.signal.confidence);
   });
 
   it("reports missing and insufficient timeframes instead of filling gaps", () => {
@@ -179,6 +196,31 @@ describe("data-driven multi-timeframe trading analysis", () => {
     const unordered = completeInput("BTCUSD");
     unordered.timeframes["1H"]![4].timestamp = unordered.timeframes["1H"]![3].timestamp;
     expect(() => analyzeTrading(unordered, NOW)).toThrow(/strictly increasing/i);
+  });
+
+  it("rejects future timestamps and overlapping candle intervals", () => {
+    const future = completeInput("BTCUSD");
+    future.timeframes["30M"]!.at(-1)!.timestamp = NOW + 60_000;
+    expect(() => analyzeTrading(future, NOW)).toThrow(/invalid OHLC/);
+    const overlapping = completeInput("BTCUSD");
+    overlapping.timeframes["1H"]![1].timestamp = overlapping.timeframes["1H"]![0].timestamp + 1;
+    expect(() => analyzeTrading(overlapping, NOW)).toThrow(/overlapping/);
+  });
+
+  it("ignores unfinished bars rather than using their changing closes for confirmation", () => {
+    const input = completeInput("BTCUSD");
+    const last = input.timeframes["30M"]!.at(-1)!;
+    input.timeframes["30M"]!.push({ ...last, timestamp: NOW, close: last.open });
+    const result = analyzeTrading(input, NOW);
+    expect(result.currentPrice).toBe(last.close);
+  });
+
+  it("keeps BTC on a continuous 24/7 schedule during weekend analysis", () => {
+    const sunday = Date.parse("2026-11-15T12:00:00Z");
+    const result = analyzeTrading(completeInput("BTCUSD", "bullish", sunday), sunday);
+    expect(result.marketSchedule).toBe("continuous_24_7");
+    expect(result.marketFreshness).toBe("fresh");
+    expect(result.signal.decision).toBe("BUY");
   });
 
   it("detects structure breaks, displacement, order blocks, FVGs, and premium/discount evidence", () => {
@@ -263,7 +305,7 @@ describe("data-driven multi-timeframe trading analysis", () => {
       ...daily[daily.length - 1],
       open: prior.close - 0.2,
       close: prior.close + 0.1,
-      high: prior.high + 0.2,
+      high: prior.high,
       low: prior.low - 0.2,
     };
     const result = analyzeTrading(input, NOW);

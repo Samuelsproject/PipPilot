@@ -150,6 +150,24 @@ describe("server-enforced workspace membership", () => {
     expect(response.body.dataSource).toBe("unavailable");
   });
 
+  it("validates analysis input only after approval and rejects malformed candles", async () => {
+    const { app } = createHarness();
+    await request(app)
+      .post("/api/workspace/trading/analyze")
+      .set("Authorization", "Bearer active-token")
+      .send({ symbol: "", timeframes: {} })
+      .expect(400);
+    const invalidCandle = await request(app)
+      .post("/api/workspace/trading/analyze")
+      .set("Authorization", "Bearer active-token")
+      .send({
+        symbol: "BTCUSD",
+        timeframes: { "30M": [{ timestamp: 1700000000000, open: 100, high: 50, low: 90, close: 95 }] },
+      })
+      .expect(400);
+    expect(invalidCandle.body.error).toMatch(/invalid OHLC/);
+  });
+
   it("requires email verification before membership approval", async () => {
     const { app } = createHarness();
     const response = await request(app)

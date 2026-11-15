@@ -5,6 +5,10 @@ import { WORKSPACE_NAV_ITEMS } from './workspace/WorkspaceLayout';
 
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('../context/AuthContext', () => ({ useAuth: useAuthMock }));
+vi.mock('@workspace/api-client-react', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@workspace/api-client-react')>(),
+  useAnalyzeTrading: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+}));
 
 describe('workspace authentication gate', () => {
   afterEach(() => cleanup());

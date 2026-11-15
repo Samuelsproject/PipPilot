@@ -9,6 +9,7 @@ import type {
   TradingTimeframe,
   TradingTimeframeAnalysis,
 } from "@workspace/api-zod";
+import { checkSignalValidity } from "./trading-signal-validity";
 
 const TIMEFRAMES: readonly TradingTimeframe[] = ["1D", "4H", "1H", "30M"];
 const TIMEFRAME_MS: Record<TradingTimeframe, number> = {
@@ -17,7 +18,7 @@ const TIMEFRAME_MS: Record<TradingTimeframe, number> = {
   "4H": 4 * 60 * 60_000,
   "1D": 24 * 60 * 60_000,
 };
-const MIN_CANDLES = 20;
+const MIN_CANDLES = 50;
 
 type InstrumentClass = TradingAnalysisResponse["instrumentClass"];
 type Direction = "bullish" | "bearish" | "neutral";
@@ -62,7 +63,6 @@ function normalizeSymbol(symbol: string): {
 
   const cryptoQuotes = "USDT|USDC|USD|EUR|GBP|JPY|AUD|CAD|CHF";
   const cryptoPair = new RegExp(`(?:BTC|XBT)(${cryptoQuotes})`);
-  const reverseCryptoPair = new RegExp(`(${cryptoQuotes})(?:BTC|XBT)`);
   if (cryptoPair.test(normalized) || cryptoPair.test(compact)) {
     const quote = normalized.match(cryptoPair)?.[1]
       ?? compact.match(cryptoPair)?.[1]
@@ -73,17 +73,6 @@ function normalizeSymbol(symbol: string): {
       marketSchedule: "continuous_24_7",
     };
   }
-  if (reverseCryptoPair.test(normalized) || reverseCryptoPair.test(compact)) {
-    const quote = normalized.match(reverseCryptoPair)?.[1]
-      ?? compact.match(reverseCryptoPair)?.[1]
-      ?? "USDT";
-    return {
-      canonical: `BTC${quote}`,
-      instrumentClass: "bitcoin",
-      marketSchedule: "continuous_24_7",
-    };
-  }
-
   if (includes(["XAUUSD", "GOLD"])) {
     return { canonical: "XAUUSD", instrumentClass: "gold", marketSchedule: "broker_defined" };
   }
@@ -91,6 +80,10 @@ function normalizeSymbol(symbol: string): {
   const indexAliases: Record<string, string[]> = {
     US30: ["US30", "DJI", "DJ30", "WS30"],
     US100: ["US100", "NAS100", "USTEC", "NASDAQ"],
+    US500: ["US500", "SPX500", "SP500"],
+    GER40: ["GER40", "DE40", "DAX40"],
+    UK100: ["UK100", "FTSE100"],
+    JP225: ["JP225", "JPN225", "NIKKEI225"],
   };
   for (const [canonical, aliases] of Object.entries(indexAliases)) {
     if (includes(aliases)) {
@@ -113,7 +106,7 @@ function normalizeSymbol(symbol: string): {
   return { canonical: null, instrumentClass: "unsupported", marketSchedule: "unavailable" };
 }
 
-function validateCandles(timeframe: TradingTimeframe, candles: TradingCandle[]): void {
+function validateCandles(timeframe: TradingTimeframe, candles: TradingCandle[], now: number): void {
   if (candles.length > 200) {
     throw new TradingInputError(`${timeframe} accepts at most 200 candles.`);
   }
@@ -122,7 +115,9 @@ function validateCandles(timeframe: TradingTimeframe, candles: TradingCandle[]):
     if (
       !Number.isSafeInteger(candle.timestamp) ||
       candle.timestamp <= 0 ||
+      candle.timestamp > now ||
       ![candle.open, candle.high, candle.low, candle.close].every(Number.isFinite) ||
+      Math.min(candle.open, candle.high, candle.low, candle.close) <= 0 ||
       candle.high < Math.max(candle.open, candle.close, candle.low) ||
       candle.low > Math.min(candle.open, candle.close, candle.high) ||
       (candle.volume !== undefined && (!Number.isFinite(candle.volume) || candle.volume < 0))
@@ -131,6 +126,9 @@ function validateCandles(timeframe: TradingTimeframe, candles: TradingCandle[]):
     }
     if (index > 0 && candle.timestamp <= candles[index - 1].timestamp) {
       throw new TradingInputError(`${timeframe} candle timestamps must be strictly increasing.`);
+    }
+    if (index > 0 && candle.timestamp - candles[index - 1].timestamp < TIMEFRAME_MS[timeframe]) {
+      throw new TradingInputError(`${timeframe} contains overlapping candle intervals.`);
     }
   }
 }
@@ -170,8 +168,8 @@ function findPivots(candles: TradingCandle[], key: "high" | "low"): Pivot[] {
     const price = candles[index][key];
     const neighbors = candles.slice(index - 2, index + 3).filter((_, offset) => offset !== 2);
     const isPivot = key === "high"
-      ? neighbors.every((candle) => price >= candle.high)
-      : neighbors.every((candle) => price <= candle.low);
+      ? neighbors.every((candle) => price > candle.high)
+      : neighbors.every((candle) => price < candle.low);
     if (isPivot) pivots.push({ index, price });
   }
   return pivots;
@@ -202,16 +200,29 @@ function makeConcept(
   return { kind, direction, evidence, low: low ?? null, high: high ?? null };
 }
 
-function detectFvg(candles: TradingCandle[], atr: number): Zone | null {
+function detectFvg(candles: TradingCandle[], atr: number, interval: number): Zone | null {
   const start = Math.max(2, candles.length - 12);
   for (let index = candles.length - 1; index >= start; index -= 1) {
     const first = candles[index - 2];
     const middle = candles[index - 1];
     const third = candles[index];
+    if (
+      third.timestamp - middle.timestamp !== interval ||
+      middle.timestamp - first.timestamp !== interval
+    ) continue;
     const middleBody = Math.abs(middle.close - middle.open);
     if (middleBody < atr * 0.45) continue;
-    if (third.low > first.high) return { low: first.high, high: third.low, index };
-    if (third.high < first.low) return { low: third.high, high: first.low, index };
+    const later = candles.slice(index + 1);
+    if (
+      third.low > first.high &&
+      middle.close > middle.open &&
+      later.every((candle) => candle.low > first.high)
+    ) return { low: first.high, high: third.low, index };
+    if (
+      third.high < first.low &&
+      middle.close < middle.open &&
+      later.every((candle) => candle.high < first.low)
+    ) return { low: third.high, high: first.low, index };
   }
   return null;
 }
@@ -222,8 +233,11 @@ function analyzeTimeframe(
   now: number,
   schedule: TradingAnalysisResponse["marketSchedule"],
 ): TimeframeState {
-  const data = candles ?? [];
-  if (data.length) validateCandles(timeframe, data);
+  const raw = candles ?? [];
+  if (raw.length) validateCandles(timeframe, raw, now);
+  // Open bars are not confirmations. Ignore them rather than treating a
+  // still-changing high/low/close as a completed structure event.
+  const data = raw.filter((candle) => candle.timestamp + TIMEFRAME_MS[timeframe] <= now);
   const latest = data.at(-1);
   const staleAfter = TIMEFRAME_MS[timeframe] * (schedule === "continuous_24_7" ? 2 : 2.5);
   const isStale = Boolean(latest && now - latest.timestamp > staleAfter);
@@ -236,7 +250,9 @@ function analyzeTimeframe(
         bias: data.length ? "neutral" : "unavailable",
         structure: data.length
           ? `Need at least ${MIN_CANDLES} ordered candles; received ${data.length}.`
-          : "No user-supplied candles were provided for this timeframe.",
+          : raw.length
+            ? "No closed candles are available; unfinished candles cannot confirm a setup."
+            : "No user-supplied candles were provided for this timeframe.",
         concepts: [],
         indicators: null,
       },
@@ -256,13 +272,14 @@ function analyzeTimeframe(
   const lows = findPivots(data, "low");
   const trend = trendFromPivots(highs, lows);
   const last = data[data.length - 1];
+  const previous = data[data.length - 2];
   const lastHigh = highs.at(-1);
   const lastLow = lows.at(-1);
   const concepts: TradingConcept[] = [];
   let bias: Direction = trend;
   let sweepDirection: Direction | null = null;
 
-  if (lastHigh && last.close > lastHigh.price) {
+  if (lastHigh && last.close > lastHigh.price && previous.close <= lastHigh.price) {
     const direction = "bullish";
     concepts.push(makeConcept(
       trend === "bearish" ? "CHOCH" : "BOS",
@@ -272,7 +289,7 @@ function analyzeTimeframe(
       last.close,
     ));
     bias = direction;
-  } else if (lastLow && last.close < lastLow.price) {
+  } else if (lastLow && last.close < lastLow.price && previous.close >= lastLow.price) {
     const direction = "bearish";
     concepts.push(makeConcept(
       trend === "bullish" ? "CHOCH" : "BOS",
@@ -301,7 +318,7 @@ function analyzeTimeframe(
       concepts.push(makeConcept(
         kind,
         "neutral",
-        `Two confirmed swing points at ${prior.price} and ${current.price} are within ${tolerance.toFixed(5)}.`,
+        `Two confirmed swing points at ${prior.price} and ${current.price} are within ${tolerance.toFixed(5)}; this is a potential ${kind === "EQUAL_HIGHS" ? "buy-side" : "sell-side"} liquidity cluster, not proof of resting orders.`,
         level - tolerance,
         level + tolerance,
       ));
@@ -322,7 +339,7 @@ function analyzeTimeframe(
       concepts.push(makeConcept(
         "INDUCEMENT",
         "bearish",
-        "The equal-high liquidity cluster was swept and rejected by the same candle.",
+        "Potential inducement proxy: an equal-high cluster and swing-high rejection coexist. Trader intent or actual resting orders cannot be established from candles.",
         lastHigh.price,
         last.high,
       ));
@@ -340,7 +357,7 @@ function analyzeTimeframe(
       concepts.push(makeConcept(
         "INDUCEMENT",
         "bullish",
-        "The equal-low liquidity cluster was swept and reclaimed by the same candle.",
+        "Potential inducement proxy: an equal-low cluster and swing-low reclaim coexist. Trader intent or actual resting orders cannot be established from candles.",
         last.low,
         lastLow.price,
       ));
@@ -386,7 +403,7 @@ function analyzeTimeframe(
     }
   }
 
-  const fvg = detectFvg(data, atr);
+  const fvg = detectFvg(data, atr, TIMEFRAME_MS[timeframe]);
   if (fvg) {
     const first = data[fvg.index - 2];
     const third = data[fvg.index];
@@ -394,7 +411,7 @@ function analyzeTimeframe(
     concepts.push(makeConcept(
       "FAIR_VALUE_GAP",
       direction,
-      `Three-candle gap remains between ${fvg.low} and ${fvg.high}; its middle candle body exceeded 0.45 ATR.`,
+      `Three-candle gap remains between ${fvg.low} and ${fvg.high}; its directional middle candle body exceeded 0.45 ATR and no later bar fully filled it. This is an imbalance proxy, not proof of institutional activity.`,
       fvg.low,
       fvg.high,
     ));
@@ -402,14 +419,14 @@ function analyzeTimeframe(
 
   const prior = data[data.length - 2];
   let crtDirection: Direction | null = null;
-  if (last.low < prior.low && last.close > prior.low && last.close < prior.high) {
+  if (last.low < prior.low && last.high <= prior.high && last.close > prior.low && last.close < prior.high) {
     crtDirection = "bullish";
-  } else if (last.high > prior.high && last.close < prior.high && last.close > prior.low) {
+  } else if (last.high > prior.high && last.low >= prior.low && last.close < prior.high && last.close > prior.low) {
     crtDirection = "bearish";
   }
   if (crtDirection) {
     concepts.push(makeConcept(
-      timeframe === "30M" ? "CRT_INTRADAY" : timeframe === "1D" ? "CRT_SWING" : "CRT_INTRADAY",
+      timeframe === "1D" || timeframe === "4H" ? "CRT_SWING" : "CRT_INTRADAY",
       crtDirection,
       `Latest candle swept the prior candle range (${prior.low}–${prior.high}) and closed back inside it at ${last.close}.`,
       prior.low,
@@ -443,23 +460,18 @@ function analyzeTimeframe(
 
   const indicators: TradingIndicators = {
     atr14: atr,
-    ema20: ema(closes.slice(-Math.min(20, closes.length)), Math.min(20, closes.length)),
-    ema50: ema(closes, Math.min(50, closes.length)),
+    ema20: ema(closes, 20),
+    ema50: ema(closes, 50),
     rsi14: rsi(closes),
   };
-  const indicatorDirection = indicators.ema20 > indicators.ema50
+  const emaDifference = indicators.ema20 - indicators.ema50;
+  const emaTolerance = Math.max(atr * 0.05, Math.abs(last.close) * 1e-10);
+  const indicatorDirection = emaDifference > emaTolerance
     ? "bullish"
-    : indicators.ema20 < indicators.ema50
+    : emaDifference < -emaTolerance
       ? "bearish"
       : "neutral";
   if (bias === "neutral" && indicatorDirection !== "neutral") bias = indicatorDirection;
-  if (isStale) {
-    concepts.push(makeConcept(
-      "SUPPORT_RESISTANCE",
-      "neutral",
-      `Data is stale: the latest ${timeframe} candle is older than ${(staleAfter / 60_000).toFixed(0)} minutes.`,
-    ));
-  }
 
   const structure = trend === "bullish"
     ? "Higher highs and higher lows"
@@ -467,7 +479,7 @@ function analyzeTimeframe(
       ? "Lower highs and lower lows"
       : concepts.some((concept) => concept.kind === "BOS" || concept.kind === "CHOCH")
         ? `Structural break detected (${concepts.find((concept) => concept.kind === "BOS" || concept.kind === "CHOCH")?.kind})`
-        : "Range / structure not confirmed";
+        : `Range / swing structure not confirmed${indicatorDirection !== "neutral" ? `; ${indicatorDirection} EMA bias only` : ""}`;
   return {
     candles: data,
     analysis: {
@@ -580,7 +592,7 @@ export function analyzeTrading(
   const higherTimeframeBias: TradingBias =
     dailyBias === "unavailable" || fourHourBias === "unavailable"
       ? "unavailable"
-      : dailyBias === fourHourBias
+      : dailyBias === fourHourBias || fourHourBias === "neutral"
         ? dailyBias
         : "neutral";
 
@@ -593,7 +605,7 @@ export function analyzeTrading(
     const incomplete = analyses
       .filter((analysis) => analysis.dataStatus === "missing" || analysis.dataStatus === "insufficient")
       .map((analysis) => `${analysis.timeframe}: ${analysis.structure}`);
-    signal = noTradeSignal("unavailable", "NO TRADE: all four timeframes need at least 20 valid candles for top-down analysis.", incomplete);
+    signal = noTradeSignal("unavailable", `NO TRADE: all four timeframes need at least ${MIN_CANDLES} valid closed candles for top-down analysis.`, incomplete);
   } else if (anyStale) {
     signal = noTradeSignal("stale", "NO TRADE: one or more supplied timeframes are stale; refresh the historical candle files before evaluating a setup.", conflicts);
   } else if (conflicts.length > 0) {
@@ -602,11 +614,11 @@ export function analyzeTrading(
     higherTimeframeBias === "unavailable" ||
     higherTimeframeBias === "neutral" ||
     oneHourBias !== higherTimeframeBias ||
-    thirtyBias !== higherTimeframeBias
+    (thirtyBias !== "neutral" && thirtyBias !== higherTimeframeBias)
   ) {
     signal = noTradeSignal(
       "valid",
-      "NO TRADE: Daily, 4H, 1H, and 30M directional alignment is not confirmed.",
+      "NO TRADE: Daily direction or 1H confirmation is missing. A neutral 4H/30M is allowed only with a confirmed 30M entry trigger; opposite structure is never silently overridden.",
       analyses.map((analysis) => `${analysis.timeframe}: ${analysis.bias} — ${analysis.structure}`),
       30,
     );
@@ -629,16 +641,32 @@ export function analyzeTrading(
         : Math.max(...recent.map((candle) => candle.high)) + stopBuffer;
       const risk = Math.abs(latest.close - stopLoss);
       const volatilityTooHigh = last30.atr > 0 && risk > last30.atr * 2.5;
+      const atrPercent = last30.atr / latest.close;
+      // These are conservative suitability gates, not calibrated volatility
+      // predictions. Crypto uses a wider threshold than FX/metals/indices.
+      const extremeVolatility = atrPercent > (symbol.instrumentClass === "bitcoin" ? 0.04 : 0.02);
       const riskPositive = risk > 0 && Number.isFinite(risk);
+      const opposingLevels = [...states.values()].flatMap((state) =>
+        direction === "bullish"
+          ? state.swingHighs.map((pivot) => pivot.price).filter((price) => price > latest.close)
+          : state.swingLows.map((pivot) => pivot.price).filter((price) => price < latest.close),
+      );
+      const nearObstacle = opposingLevels.some((price) =>
+        Math.abs(price - latest.close) < risk * 2,
+      );
       const expiry = latest.timestamp + TIMEFRAME_MS["30M"] * 2;
       const expired = now > expiry;
       const stopAlreadyCrossed = direction === "bullish"
         ? latest.close <= stopLoss
         : latest.close >= stopLoss;
-      if (!riskPositive || volatilityTooHigh || stopAlreadyCrossed) {
+      if (!riskPositive || volatilityTooHigh || extremeVolatility || stopAlreadyCrossed || nearObstacle) {
         signal = noTradeSignal(
           "valid",
-          volatilityTooHigh
+          nearObstacle
+            ? "NO TRADE: confirmed opposing swing liquidity lies before the minimum 2:1 target; available structural reward is too small."
+            : extremeVolatility
+              ? "NO TRADE: 30M ATR relative to price exceeds the conservative instrument-class volatility limit."
+              : volatilityTooHigh
             ? "NO TRADE: the required stop distance exceeds 2.5 times 30M ATR, so current volatility makes the setup unsuitable."
             : "NO TRADE: the entry and invalidation levels do not produce a valid positive-risk setup.",
           [`Entry close ${latest.close}; stop ${stopLoss}; 30M ATR ${last30.atr}.`],
@@ -655,24 +683,27 @@ export function analyzeTrading(
       } else {
         const sign = direction === "bullish" ? 1 : -1;
         const confidence = Math.min(
-          95,
-          35 +
+          85,
+          25 +
             (dailyBias === fourHourBias ? 15 : 0) +
             (oneHourBias === higherTimeframeBias ? 10 : 0) +
             (thirtyBias === higherTimeframeBias ? 10 : 0) +
             15 +
             (last30.orderBlock || last30.fvg ? 10 : 0),
         );
-        const riskMultiples = [1.5, 2, 3];
+        const riskMultiples = [2, 3, 4];
         const targets: TradingSignal["targets"] = riskMultiples.map((multiple, index) => ({
           label: `TP${index + 1}` as "TP1" | "TP2" | "TP3",
           price: latest.close + sign * risk * multiple,
           riskReward: multiple,
         }));
-        const relevantZone = last30.orderBlock ?? last30.fvg;
+        const relevantZone = [last30.orderBlock, last30.fvg].find((zone) =>
+          zone && latest.close >= zone.low && latest.close <= zone.high,
+        );
         const evidence = [
-          `Daily and 4H bias are ${higherTimeframeBias}.`,
-          `1H and 30M structure both align ${direction}.`,
+          `Daily bias is ${dailyBias}; 4H is ${fourHourBias}${fourHourBias === "neutral" ? " (neutral, not confirming; confidence reduced)" : ""}.`,
+          `1H confirmation is ${oneHourBias}; 30M bias is ${thirtyBias}${thirtyBias === "neutral" ? " (range, with a directional reclaim trigger; confidence reduced)" : ""}.`,
+          `Stop ${stopLoss} is beyond the last six 30M candles with a 0.15 ATR buffer (${stopBuffer}); calculated targets use 2R, 3R, and 4R, not predictions.`,
           ...last30.analysis.concepts
             .filter((concept) =>
               concept.kind === "LIQUIDITY_SWEEP" ||
@@ -693,12 +724,13 @@ export function analyzeTrading(
           stopLoss,
           targets,
           confidence,
-          confidenceExplanation: `${confidence}/100 confluence score from aligned structure and a confirmed 30M trigger. This is not a probability of profit.`,
+          confidenceExplanation: `${confidence}/100 rule-based confluence score from Daily/4H context, 1H confirmation, and a 30M trigger. Neutral timeframes receive less weight. This is not a calibrated probability of profit; broker spread, live quotes, and news remain unverified.`,
           evidence,
           invalidationConditions: [
             `${direction === "bullish" ? "A 30M close" : "A 30M close"} beyond stop ${stopLoss} invalidates the setup.`,
             `Daily or 4H structure changing to the opposite bias invalidates the directional thesis.`,
             "Reassess after a material candle update; do not treat this as an execution instruction.",
+            "Historical imports cannot monitor changing prices. Upload refreshed bars; this proposal is not verified against a live executable quote.",
           ],
           expiresAt: expiry,
         };
@@ -720,7 +752,7 @@ export function analyzeTrading(
     higherTimeframeBias,
     conflicts,
     timeframes: analyses,
-    signal,
+    signal: checkSignalValidity(signal, last30.candles, higherTimeframeBias, now),
     macroContext: {
       status: "unavailable",
       supportedEvents: ["CPI", "PPI", "NFP", "FOMC"],
