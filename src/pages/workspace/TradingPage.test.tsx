@@ -7,12 +7,16 @@ const {
   useAnalyzeTradingMock,
   useAnalyzeMarketDataMock,
   useGetMarketDataStatusMock,
+  useAuthMock,
+  refetchStatusMock,
 } = vi.hoisted(() => ({
   mutateMock: vi.fn(),
   providerMutateMock: vi.fn(),
   useAnalyzeTradingMock: vi.fn(),
   useAnalyzeMarketDataMock: vi.fn(),
   useGetMarketDataStatusMock: vi.fn(),
+  useAuthMock: vi.fn(),
+  refetchStatusMock: vi.fn(),
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
@@ -21,7 +25,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetMarketDataStatus: useGetMarketDataStatusMock,
 }));
 vi.mock("../../context/AuthContext", () => ({
-  useAuth: () => ({ session: { access_token: "test-member-token" } }),
+  useAuth: useAuthMock,
 }));
 
 import { TradingPage } from "./TradingPage";
@@ -74,37 +78,19 @@ describe("TradingPage", () => {
   beforeEach(() => {
     mutateMock.mockReset();
     providerMutateMock.mockReset();
+    useAuthMock.mockReset();
+    refetchStatusMock.mockReset();
+    useAuthMock.mockReturnValue({
+      session: { access_token: "test-member-token", user: { id: "member-a" } },
+    });
     useAnalyzeTradingMock.mockImplementation(() => ({
-      mutate: (variables: unknown, options?: { onSuccess?: (value: typeof noTradeResult) => void }) => {
-        mutateMock(variables);
-        options?.onSuccess?.(noTradeResult);
-      },
+      mutate: (variables: unknown, options?: unknown) => mutateMock(variables, options),
       isPending: false,
       isError: false,
       error: null,
     }));
     useAnalyzeMarketDataMock.mockImplementation(() => ({
-      mutate: (variables: unknown, options?: { onSuccess?: (value: unknown) => void }) => {
-        providerMutateMock(variables);
-        options?.onSuccess?.({
-          providerId: "twelvedata",
-          providerName: "Twelve Data",
-          providerSymbol: "XAU/USD",
-          providerExchange: "Test Exchange",
-          dataMode: "live",
-          freshness: "fresh",
-          quote: {
-            symbol: "XAU/USD",
-            exchange: "Test Exchange",
-            price: 2350.25,
-            timestamp: 1_799_999_900_000,
-            marketOpen: true,
-          },
-          lastSuccessfulUpdateAt: 1_800_000_000_000,
-          warnings: [],
-          analysis: { ...noTradeResult, dataSource: "provider_live" },
-        });
-      },
+      mutate: (variables: unknown, options?: unknown) => providerMutateMock(variables, options),
       isPending: false,
       isError: false,
       error: null,
@@ -119,12 +105,64 @@ describe("TradingPage", () => {
         supportedInstrumentClasses: ["gold", "bitcoin", "forex", "index"],
         message: "Provider configuration is required. CSV imports remain available.",
       },
-      refetch: vi.fn(),
+      refetch: refetchStatusMock,
       isLoading: false,
       isError: false,
     }));
   });
   afterEach(() => cleanup());
+
+  function useConfiguredProviderStatus() {
+    useGetMarketDataStatusMock.mockReturnValue({
+      data: {
+        providerId: "twelvedata",
+        providerName: "Twelve Data",
+        connectionState: "disconnected",
+        dataMode: "live",
+        lastSuccessfulUpdateAt: null,
+        supportedInstrumentClasses: ["gold", "bitcoin", "forex", "index"],
+        message: "Provider is configured; fetch data to verify connectivity.",
+      },
+      refetch: refetchStatusMock,
+      isLoading: false,
+      isError: false,
+    });
+  }
+
+  function providerResponse(symbol: string) {
+    return {
+      providerId: "twelvedata",
+      providerName: "Twelve Data",
+      providerSymbol: symbol === "BTCUSD" ? "BTC/USD" : "XAU/USD",
+      providerExchange: "Test Exchange",
+      dataMode: "live",
+      freshness: "fresh",
+      quote: {
+        symbol: symbol === "BTCUSD" ? "BTC/USD" : "XAU/USD",
+        exchange: "Test Exchange",
+        price: 2350.25,
+        timestamp: 1_799_999_900_000,
+        marketOpen: true,
+      },
+      lastSuccessfulUpdateAt: 1_800_000_000_000,
+      warnings: [],
+      analysis: { ...noTradeResult, requestedSymbol: symbol, dataSource: "provider_live" },
+    };
+  }
+
+  function resolveProviderRequest(index: number, symbol: string) {
+    const callbacks = providerMutateMock.mock.calls[index][1] as {
+      onSuccess?: (value: unknown) => void;
+    };
+    callbacks.onSuccess?.(providerResponse(symbol));
+  }
+
+  function resolveCsvRequest(index: number) {
+    const callbacks = mutateMock.mock.calls[index][1] as {
+      onSuccess?: (value: typeof noTradeResult) => void;
+    };
+    callbacks.onSuccess?.(noTradeResult);
+  }
 
   it("shows the actual provider readiness and does not show fictional market data", () => {
     render(<TradingPage />);
@@ -153,33 +191,119 @@ describe("TradingPage", () => {
     };
     expect(request.data.symbol).toBe("XAUUSD");
     expect(request.data.timeframes["30M"]).toHaveLength(1);
+    resolveCsvRequest(0);
     const decision = await screen.findByTestId("status-trading-decision");
     expect(decision.textContent).toBe("NO_TRADE");
     expect(screen.getByText("User-supplied historical data")).toBeTruthy();
   });
 
   it("uses the protected provider-analysis request and displays real source metadata", async () => {
-    useGetMarketDataStatusMock.mockImplementation(() => ({
-      data: {
-        providerId: "twelvedata",
-        providerName: "Twelve Data",
-        connectionState: "disconnected",
-        dataMode: "live",
-        lastSuccessfulUpdateAt: null,
-        supportedInstrumentClasses: ["gold", "bitcoin", "forex", "index"],
-        message: "Provider is configured; fetch data to verify connectivity.",
-      },
-      refetch: vi.fn(),
-      isLoading: false,
-      isError: false,
-    }));
+    useConfiguredProviderStatus();
     render(<TradingPage />);
     fireEvent.click(screen.getByTestId("button-analyze-provider"));
 
     await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
     expect(providerMutateMock.mock.calls[0][0]).toEqual({ data: { symbol: "XAUUSD" } });
+    resolveProviderRequest(0, "XAUUSD");
     expect(await screen.findByText("Live provider data")).toBeTruthy();
     expect(screen.getByText("Data by Twelve Data")).toBeTruthy();
     expect(screen.getByTestId("status-trading-decision").textContent).toBe("NO_TRADE");
+    expect(refetchStatusMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores provider results after the selected instrument changes", async () => {
+    useConfiguredProviderStatus();
+    render(<TradingPage />);
+    fireEvent.click(screen.getByTestId("button-analyze-provider"));
+    await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByTestId("input-trading-symbol"), {
+      target: { value: "BTCUSD" },
+    });
+    resolveProviderRequest(0, "XAUUSD");
+
+    expect(screen.queryByText("Live provider data")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "XAUUSDm" })).toBeNull();
+    expect(refetchStatusMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the newest provider request when an older response finishes last", async () => {
+    useConfiguredProviderStatus();
+    render(<TradingPage />);
+    fireEvent.click(screen.getByTestId("button-analyze-provider"));
+    await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByTestId("input-trading-symbol"), {
+      target: { value: "BTCUSD" },
+    });
+    fireEvent.click(screen.getByTestId("button-analyze-provider"));
+    await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(2));
+
+    resolveProviderRequest(1, "BTCUSD");
+    await screen.findByRole("heading", { name: "BTCUSD" });
+    resolveProviderRequest(0, "XAUUSD");
+
+    expect(screen.getByRole("heading", { name: "BTCUSD" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "XAUUSDm" })).toBeNull();
+  });
+
+  it("does not let a provider response replace a newer CSV analysis", async () => {
+    useConfiguredProviderStatus();
+    render(<TradingPage />);
+    fireEvent.click(screen.getByTestId("button-analyze-provider"));
+    await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByTestId("button-analyze-market"));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+    resolveCsvRequest(0);
+    resolveProviderRequest(0, "XAUUSD");
+
+    expect(await screen.findByText("Imported candle analysis")).toBeTruthy();
+    expect(screen.queryByText("Live provider data")).toBeNull();
+  });
+
+  it("does not let an older CSV response replace a newer provider analysis", async () => {
+    useConfiguredProviderStatus();
+    render(<TradingPage />);
+    fireEvent.click(screen.getByTestId("button-analyze-market"));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByTestId("button-analyze-provider"));
+    await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
+    resolveProviderRequest(0, "XAUUSD");
+    await screen.findByText("Live provider data");
+    resolveCsvRequest(0);
+
+    expect(screen.getByText("Live provider data")).toBeTruthy();
+    expect(screen.queryByText("Imported candle analysis")).toBeNull();
+  });
+
+  it("keys provider readiness by member and ignores responses after an account switch", async () => {
+    useConfiguredProviderStatus();
+    const { rerender } = render(<TradingPage />);
+    const initialOptions = useGetMarketDataStatusMock.mock.calls.at(-1)?.[0] as {
+      query: { queryKey: unknown[] };
+    };
+    expect(initialOptions.query.queryKey).toEqual([
+      "/api/workspace/market-data/status",
+      "member-a",
+    ]);
+
+    fireEvent.click(screen.getByTestId("button-analyze-provider"));
+    await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
+    useAuthMock.mockReturnValue({
+      session: { access_token: "another-member-token", user: { id: "member-b" } },
+    });
+    rerender(<TradingPage />);
+
+    const switchedOptions = useGetMarketDataStatusMock.mock.calls.at(-1)?.[0] as {
+      query: { queryKey: unknown[] };
+    };
+    expect(switchedOptions.query.queryKey).toEqual([
+      "/api/workspace/market-data/status",
+      "member-b",
+    ]);
+    resolveProviderRequest(0, "XAUUSD");
+    expect(screen.queryByText("Live provider data")).toBeNull();
   });
 });

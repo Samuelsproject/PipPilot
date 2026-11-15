@@ -10,6 +10,7 @@ import type {
   TradingTimeframeAnalysis,
 } from "@workspace/api-zod";
 import { checkSignalValidity } from "./trading-signal-validity";
+import { nextLocalMidnight } from "./timezone";
 
 const TIMEFRAMES: readonly TradingTimeframe[] = ["1D", "4H", "1H", "30M"];
 const TIMEFRAME_MS: Record<TradingTimeframe, number> = {
@@ -106,7 +107,12 @@ function normalizeSymbol(symbol: string): {
   return { canonical: null, instrumentClass: "unsupported", marketSchedule: "unavailable" };
 }
 
-function validateCandles(timeframe: TradingTimeframe, candles: TradingCandle[], now: number): void {
+function validateCandles(
+  timeframe: TradingTimeframe,
+  candles: TradingCandle[],
+  now: number,
+  dailyTimeZone?: string,
+): void {
   if (candles.length > 200) {
     throw new TradingInputError(`${timeframe} accepts at most 200 candles.`);
   }
@@ -127,8 +133,14 @@ function validateCandles(timeframe: TradingTimeframe, candles: TradingCandle[], 
     if (index > 0 && candle.timestamp <= candles[index - 1].timestamp) {
       throw new TradingInputError(`${timeframe} candle timestamps must be strictly increasing.`);
     }
-    if (index > 0 && candle.timestamp - candles[index - 1].timestamp < TIMEFRAME_MS[timeframe]) {
-      throw new TradingInputError(`${timeframe} contains overlapping candle intervals.`);
+    if (index > 0) {
+      const previous = candles[index - 1];
+      const previousEnd = timeframe === "1D" && dailyTimeZone
+        ? nextLocalMidnight(previous.timestamp, dailyTimeZone)
+        : previous.timestamp + TIMEFRAME_MS[timeframe];
+      if (previousEnd == null || candle.timestamp < previousEnd) {
+        throw new TradingInputError(`${timeframe} contains overlapping candle intervals.`);
+      }
     }
   }
 }
@@ -232,12 +244,18 @@ function analyzeTimeframe(
   candles: TradingCandle[] | undefined,
   now: number,
   schedule: TradingAnalysisResponse["marketSchedule"],
+  dailyTimeZone?: string,
 ): TimeframeState {
   const raw = candles ?? [];
-  if (raw.length) validateCandles(timeframe, raw, now);
+  if (raw.length) validateCandles(timeframe, raw, now, dailyTimeZone);
   // Open bars are not confirmations. Ignore them rather than treating a
   // still-changing high/low/close as a completed structure event.
-  const data = raw.filter((candle) => candle.timestamp + TIMEFRAME_MS[timeframe] <= now);
+  const data = raw.filter((candle) => {
+    const closesAt = timeframe === "1D" && dailyTimeZone
+      ? nextLocalMidnight(candle.timestamp, dailyTimeZone)
+      : candle.timestamp + TIMEFRAME_MS[timeframe];
+    return closesAt != null && closesAt <= now;
+  });
   const latest = data.at(-1);
   const staleAfter = TIMEFRAME_MS[timeframe] * (schedule === "continuous_24_7" ? 2 : 2.5);
   const isStale = Boolean(latest && now - latest.timestamp > staleAfter);
@@ -529,13 +547,20 @@ function noTradeSignal(
 export function analyzeTrading(
   input: TradingAnalysisInput,
   now = Date.now(),
+  options: { dailyTimeZone?: string } = {},
 ): TradingAnalysisResponse {
   const symbol = normalizeSymbol(input.symbol);
   const states = new Map<TradingTimeframe, TimeframeState>();
   for (const timeframe of TIMEFRAMES) {
     states.set(
       timeframe,
-      analyzeTimeframe(timeframe, input.timeframes[timeframe], now, symbol.marketSchedule),
+      analyzeTimeframe(
+        timeframe,
+        input.timeframes[timeframe],
+        now,
+        symbol.marketSchedule,
+        timeframe === "1D" ? options.dailyTimeZone : undefined,
+      ),
     );
   }
 

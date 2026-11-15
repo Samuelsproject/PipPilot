@@ -34,8 +34,11 @@ function makeSeries(timeframe: TradingTimeframe, now = FIXED_NOW): ProviderCandl
     exchangeTimezone: "UTC",
     candles: Array.from({ length: 60 }, (_, index) => {
       const close = 2_000 + index;
+      const timeframeOrigin = timeframe === "1D"
+        ? Math.floor(now / FRAME_MS["1D"]) * FRAME_MS["1D"]
+        : now;
       return {
-        timestamp: now - (60 - index + 1) * step,
+        timestamp: timeframeOrigin - (60 - index + 1) * step,
         open: close - 0.5,
         high: close + 1,
         low: close - 1,
@@ -165,6 +168,7 @@ describe("Twelve Data adapter", () => {
           is_market_open: true,
         });
       }
+      const interval = url.searchParams.get("interval");
       return createResponse({
         meta: {
           symbol: "EUR/USD",
@@ -172,7 +176,7 @@ describe("Twelve Data adapter", () => {
           exchange_timezone: "America/New_York",
         },
         values: [{
-          datetime: "2026-01-02",
+          datetime: interval === "1day" ? "2026-01-02" : "2026-01-02 07:00:00",
           open: "1.1",
           high: "1.2",
           low: "1.0",
@@ -201,8 +205,100 @@ describe("Twelve Data adapter", () => {
     expect(requests.slice(2).map((url) => url.searchParams.get("interval"))).toEqual([
       "4h", "1h", "30min",
     ]);
-    expect(requests.slice(1).every((url) => url.searchParams.get("timezone") === "UTC")).toBe(true);
+    expect(requests[1].searchParams.has("timezone")).toBe(false);
+    expect(requests.slice(2).every((url) => url.searchParams.get("timezone") === "UTC")).toBe(true);
     expect(requests.slice(1).every((url) => url.searchParams.get("outputsize") === "200")).toBe(true);
+  });
+
+  it("interprets intraday datetimes as UTC even when exchange metadata is non-UTC", async () => {
+    let requestedUrl: URL | undefined;
+    const provider = new TwelveDataProvider(
+      "unit-test-placeholder",
+      vi.fn(async (input) => {
+        requestedUrl = new URL(String(input));
+        return createResponse({
+          meta: {
+            symbol: "EUR/USD",
+            exchange: "Test Exchange",
+            exchange_timezone: "America/New_York",
+          },
+          values: [{
+            datetime: "2026-03-08 07:00:00",
+            open: "1.1",
+            high: "1.2",
+            low: "1.0",
+            close: "1.15",
+          }],
+        });
+      }),
+      500,
+      "https://provider.invalid",
+    );
+
+    const series = await provider.fetchCandles({ symbol: "EUR/USD" }, "30M");
+    expect(series.candles[0].timestamp).toBe(Date.parse("2026-03-08T07:00:00Z"));
+    expect(requestedUrl?.searchParams.get("timezone")).toBe("UTC");
+  });
+
+  it.each([
+    ["2026-03-08", "2026-03-08T05:00:00Z"],
+    ["2026-03-09", "2026-03-09T04:00:00Z"],
+    ["2026-11-01", "2026-11-01T04:00:00Z"],
+    ["2026-11-02", "2026-11-02T05:00:00Z"],
+  ])("interprets daily date %s as exchange-local midnight across DST", async (datetime, expected) => {
+    const provider = new TwelveDataProvider(
+      "unit-test-placeholder",
+      vi.fn(async () => createResponse({
+        meta: {
+          symbol: "EUR/USD",
+          exchange: "Test Exchange",
+          exchange_timezone: "America/New_York",
+        },
+        values: [{
+          datetime,
+          open: "1.1",
+          high: "1.2",
+          low: "1.0",
+          close: "1.15",
+        }],
+      })),
+      500,
+      "https://provider.invalid",
+    );
+
+    const series = await provider.fetchCandles({ symbol: "EUR/USD" }, "1D");
+    expect(series.candles[0].timestamp).toBe(Date.parse(expected));
+  });
+
+  it.each([
+    ["2026-02-30 07:00:00", "30M", "America/New_York"],
+    ["2026-03-08T07:00:00Z", "1H", "America/New_York"],
+    ["2026-02-30", "1D", "America/New_York"],
+    ["2026-03-08", "1D", null],
+  ] as const)("rejects undocumented or invalid provider timestamp %s for %s", async (datetime, timeframe, timezone) => {
+    const provider = new TwelveDataProvider(
+      "unit-test-placeholder",
+      vi.fn(async () => createResponse({
+        meta: {
+          symbol: "EUR/USD",
+          exchange: "Test Exchange",
+          ...(timezone ? { exchange_timezone: timezone } : {}),
+        },
+        values: [{
+          datetime,
+          open: "1.1",
+          high: "1.2",
+          low: "1.0",
+          close: "1.15",
+        }],
+      })),
+      500,
+      "https://provider.invalid",
+    );
+
+    await expect(
+      provider.fetchCandles({ symbol: "EUR/USD" }, timeframe),
+    ).rejects.toMatchObject({ kind: "invalid_response" });
   });
 
   it("rejects malformed candles and mismatched provider symbols", async () => {
@@ -280,6 +376,35 @@ describe("provider-backed analysis service", () => {
     expect(response.analysis.currentPrice).toBeNull();
     expect(response.analysis.signal.decision).toBe("NO_TRADE");
     expect(response.analysis.dataSource).toBe("provider_live");
+  });
+
+  it("marks stale provider candles stale after timezone normalization", async () => {
+    const baseProvider = makeProvider();
+    const provider: MarketDataProvider = {
+      ...baseProvider,
+      fetchCandles: vi.fn(async (instrument, timeframe) => {
+        const series = await baseProvider.fetchCandles(instrument, timeframe);
+        return timeframe === "30M"
+          ? {
+            ...series,
+            candles: series.candles.map((candle) => ({
+              ...candle,
+              timestamp: candle.timestamp - 60 * 60_000,
+            })),
+          }
+          : series;
+      }),
+    };
+    const service = new MarketDataService({
+      env: configuredEnvironment(),
+      clock: () => FIXED_NOW,
+      provider,
+    });
+
+    const response = await service.analyze("XAUUSD", "member-a");
+    expect(response.freshness).toBe("stale");
+    expect(response.analysis.marketFreshness).toBe("stale");
+    expect(response.analysis.signal.decision).toBe("NO_TRADE");
   });
 
   it("labels delayed data and suppresses current live signals", async () => {

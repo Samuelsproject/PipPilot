@@ -215,6 +215,43 @@ describe("data-driven multi-timeframe trading analysis", () => {
     expect(result.currentPrice).toBe(last.close);
   });
 
+  it("uses exchange-local daily boundaries across spring and fall DST changes", () => {
+    const candle = (timestamp: number): TradingCandle => ({
+      timestamp,
+      open: 1.1,
+      high: 1.2,
+      low: 1.0,
+      close: 1.15,
+    });
+
+    const spring = analyzeTrading({
+      symbol: "EURUSD",
+      timeframes: {
+        "1D": [
+          candle(Date.parse("2026-03-08T05:00:00Z")),
+          candle(Date.parse("2026-03-09T04:00:00Z")),
+        ],
+      },
+    }, Date.parse("2026-03-09T04:30:00Z"), { dailyTimeZone: "America/New_York" });
+    expect(spring.timeframes.find((item) => item.timeframe === "1D")?.dataStatus)
+      .toBe("insufficient");
+
+    const fallBar = candle(Date.parse("2026-11-01T04:00:00Z"));
+    const beforeFallClose = analyzeTrading({
+      symbol: "EURUSD",
+      timeframes: { "1D": [fallBar] },
+    }, Date.parse("2026-11-02T04:30:00Z"), { dailyTimeZone: "America/New_York" });
+    expect(beforeFallClose.timeframes.find((item) => item.timeframe === "1D")?.dataStatus)
+      .toBe("missing");
+
+    const afterFallClose = analyzeTrading({
+      symbol: "EURUSD",
+      timeframes: { "1D": [fallBar] },
+    }, Date.parse("2026-11-02T05:00:00Z"), { dailyTimeZone: "America/New_York" });
+    expect(afterFallClose.timeframes.find((item) => item.timeframe === "1D")?.dataStatus)
+      .toBe("insufficient");
+  });
+
   it("keeps BTC on a continuous 24/7 schedule during weekend analysis", () => {
     const sunday = Date.parse("2026-11-15T12:00:00Z");
     const result = analyzeTrading(completeInput("BTCUSD", "bullish", sunday), sunday);

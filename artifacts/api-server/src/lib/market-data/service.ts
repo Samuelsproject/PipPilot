@@ -372,7 +372,11 @@ export class MarketDataService {
       const candles = series[timeframe]?.candles;
       if (candles) timeframes[timeframe] = candles;
     }
-    let analysis = analyzeTrading({ symbol: requestedSymbol, timeframes }, now);
+    let analysis = analyzeTrading(
+      { symbol: requestedSymbol, timeframes },
+      now,
+      { dailyTimeZone: series["1D"]?.exchangeTimezone },
+    );
 
     const quoteAge = quote == null ? Number.POSITIVE_INFINITY : now - quote.timestamp;
     const maxQuoteAge = baseline.marketSchedule === "continuous_24_7"

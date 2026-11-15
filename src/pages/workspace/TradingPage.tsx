@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useAnalyzeMarketData,
   useAnalyzeTrading,
@@ -36,14 +36,25 @@ interface ImportedTimeframe {
   warnings: string[];
 }
 
+type AnalysisMode = "csv" | "provider";
+
+interface AnalysisError {
+  mode: AnalysisMode;
+  message: string;
+}
+
 export const TradingPage = () => {
   const { session } = useAuth();
+  const memberId = session?.user?.id ?? null;
   const [symbol, setSymbol] = useState("XAUUSD");
   const [imports, setImports] = useState<Partial<Record<TradingTimeframe, ImportedTimeframe>>>({});
   const [importError, setImportError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<TradingAnalysisResponse | null>(null);
   const [providerAnalysis, setProviderAnalysis] = useState<MarketDataAnalysisResponse | null>(null);
+  const [pendingAnalysis, setPendingAnalysis] = useState<AnalysisMode | null>(null);
+  const [analysisError, setAnalysisError] = useState<AnalysisError | null>(null);
   const revision = useRef(0);
+  const previousMemberId = useRef(memberId);
   const fileRevisions = useRef<Partial<Record<TradingTimeframe, number>>>({});
   const pendingReads = useRef(0);
   const [isReading, setIsReading] = useState(false);
@@ -56,6 +67,7 @@ export const TradingPage = () => {
     query: {
       enabled: Boolean(session?.access_token),
       refetchInterval: 60_000,
+      queryKey: ["/api/workspace/market-data/status", memberId],
     },
     request: session?.access_token
       ? { headers: { Authorization: `Bearer ${session.access_token}` } }
@@ -67,13 +79,26 @@ export const TradingPage = () => {
       : undefined,
   });
 
-  const handleFile = async (timeframe: TradingTimeframe, file?: File) => {
+  const invalidateAnalysis = () => {
     revision.current += 1;
+    setAnalysis(null);
+    setProviderAnalysis(null);
+    setPendingAnalysis(null);
+    setAnalysisError(null);
+  };
+
+  useEffect(() => {
+    if (previousMemberId.current !== memberId) {
+      previousMemberId.current = memberId;
+      invalidateAnalysis();
+    }
+  }, [memberId]);
+
+  const handleFile = async (timeframe: TradingTimeframe, file?: File) => {
+    invalidateAnalysis();
     const fileRevision = (fileRevisions.current[timeframe] ?? 0) + 1;
     fileRevisions.current[timeframe] = fileRevision;
     setImportError(null);
-    setAnalysis(null);
-    setProviderAnalysis(null);
     if (!file) {
       setImports((current) => {
         const next = { ...current };
@@ -113,25 +138,50 @@ export const TradingPage = () => {
       const file = imports[timeframe];
       if (file) timeframes[timeframe] = file.candles;
     }
+    setPendingAnalysis("csv");
+    setAnalysisError(null);
     setAnalysis(null);
     setProviderAnalysis(null);
     analyze.mutate({ data: { symbol: symbol.trim(), timeframes } }, {
       onSuccess: (result) => {
-        if (requestRevision === revision.current) setAnalysis(result);
+        if (requestRevision !== revision.current) return;
+        setAnalysis(result);
+        setPendingAnalysis(null);
+      },
+      onError: (error) => {
+        if (requestRevision !== revision.current) return;
+        setAnalysisError({
+          mode: "csv",
+          message: error instanceof Error ? error.message : "Analysis request failed. Please try again.",
+        });
+        setPendingAnalysis(null);
       },
     });
   };
 
   const submitProviderAnalysis = () => {
     if (!symbol.trim()) return;
+    const requestRevision = ++revision.current;
+    setPendingAnalysis("provider");
+    setAnalysisError(null);
     setAnalysis(null);
     setProviderAnalysis(null);
     analyzeProviderData.mutate(
       { data: { symbol: symbol.trim() } },
       {
         onSuccess: (result) => {
+          if (requestRevision !== revision.current) return;
           setProviderAnalysis(result);
+          setPendingAnalysis(null);
           void marketDataStatus.refetch();
+        },
+        onError: () => {
+          if (requestRevision !== revision.current) return;
+          setAnalysisError({
+            mode: "provider",
+            message: "Market data could not be retrieved. No live signal was generated; CSV import remains available.",
+          });
+          setPendingAnalysis(null);
         },
       },
     );
@@ -190,10 +240,8 @@ export const TradingPage = () => {
             <select
               value={INSTRUMENT_PRESETS.includes(symbol.toUpperCase()) ? symbol.toUpperCase() : "CUSTOM"}
               onChange={(event) => {
-                revision.current += 1;
+                invalidateAnalysis();
                 setSymbol(event.target.value === "CUSTOM" ? "" : event.target.value);
-                setAnalysis(null);
-                setProviderAnalysis(null);
               }}
               data-testid="select-market-instrument"
               className="mt-2 min-h-11 w-full rounded-xl border border-[#1A363E] bg-[#101B20] px-3 text-sm text-[#E8F2EE] outline-none focus:border-[#168BFF] focus-visible:ring-2 focus-visible:ring-[#168BFF]/40"
@@ -208,10 +256,8 @@ export const TradingPage = () => {
               type="text"
               value={symbol}
               onChange={(event) => {
-                revision.current += 1;
+                invalidateAnalysis();
                 setSymbol(event.target.value);
-                setAnalysis(null);
-                setProviderAnalysis(null);
               }}
               placeholder="e.g. XAUUSDm, BTCUSD.a, US30.cash"
               data-testid="input-trading-symbol"
@@ -256,8 +302,8 @@ export const TradingPage = () => {
         </div>
 
         {importError && <p role="alert" data-testid="error-market-csv" className="mt-3 rounded-lg border border-[#E05252]/30 bg-[#E05252]/10 p-3 text-xs text-[#FF9696]">{importError}</p>}
-        {analyze.isError && <p role="alert" className="mt-3 rounded-lg border border-[#E05252]/30 bg-[#E05252]/10 p-3 text-xs text-[#FF9696]">{analyze.error instanceof Error ? analyze.error.message : "Analysis request failed. Please try again."}</p>}
-        {analyzeProviderData.isError && <p role="alert" data-testid="error-market-provider" className="mt-3 rounded-lg border border-[#E05252]/30 bg-[#E05252]/10 p-3 text-xs text-[#FF9696]">Market data could not be retrieved. No live signal was generated; CSV import remains available.</p>}
+        {analysisError?.mode === "csv" && <p role="alert" className="mt-3 rounded-lg border border-[#E05252]/30 bg-[#E05252]/10 p-3 text-xs text-[#FF9696]">{analysisError.message}</p>}
+        {analysisError?.mode === "provider" && <p role="alert" data-testid="error-market-provider" className="mt-3 rounded-lg border border-[#E05252]/30 bg-[#E05252]/10 p-3 text-xs text-[#FF9696]">{analysisError.message}</p>}
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
@@ -265,24 +311,24 @@ export const TradingPage = () => {
             onClick={submitProviderAnalysis}
             disabled={
               !symbol.trim() ||
-              analyzeProviderData.isPending ||
+              pendingAnalysis === "provider" ||
               marketDataStatus.data?.connectionState === "configuration_required"
             }
             data-testid="button-analyze-provider"
             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#16A36A] px-4 text-xs font-bold text-[#E8F2EE] transition-colors hover:bg-[#148f5d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3DDC97] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {analyzeProviderData.isPending && <LoaderCircle className="size-4 animate-spin" />}
-            {analyzeProviderData.isPending ? "Fetching market data…" : "Fetch and analyze provider data"}
+            {pendingAnalysis === "provider" && <LoaderCircle className="size-4 animate-spin" />}
+            {pendingAnalysis === "provider" ? "Fetching market data…" : "Fetch and analyze provider data"}
           </button>
           <button
             type="button"
             onClick={submitAnalysis}
-            disabled={!symbol.trim() || analyze.isPending || isReading}
+            disabled={!symbol.trim() || pendingAnalysis === "csv" || isReading}
             data-testid="button-analyze-market"
             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#16A36A] px-4 text-xs font-bold text-[#E8F2EE] transition-colors hover:bg-[#148f5d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3DDC97] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {analyze.isPending && <LoaderCircle className="size-4 animate-spin" />}
-            {analyze.isPending ? "Analyzing candles…" : "Analyze CSV data"}
+            {pendingAnalysis === "csv" && <LoaderCircle className="size-4 animate-spin" />}
+            {pendingAnalysis === "csv" ? "Analyzing candles…" : "Analyze CSV data"}
           </button>
           <span aria-live="polite" className="text-[10px] text-[#A9BEB5]">
             {complete ? "All four timeframes are loaded." : `Each timeframe needs at least ${MIN_CANDLES} closed candles. Missing or short timeframes return NO TRADE with data marked unavailable.`}

@@ -6,6 +6,7 @@ import {
   type ProviderQuote,
   type ProviderSymbol,
 } from "./types";
+import { wallClockToTimestamp, type WallClockParts } from "../timezone";
 
 const BASE_URL = "https://api.twelvedata.com";
 const TIMEFRAME_INTERVAL: Record<TradingTimeframe, string> = {
@@ -41,65 +42,46 @@ function epochMilliseconds(value: unknown): number | null {
   return Number.isSafeInteger(milliseconds) ? milliseconds : null;
 }
 
-function parseLocalDateTime(value: string, timeZone: string): number | null {
-  const explicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
-  if (explicitZone) {
-    const timestamp = Date.parse(value.replace(" ", "T"));
-    return Number.isFinite(timestamp) ? timestamp : null;
+function parseProviderTimestamp(
+  value: unknown,
+  timeframe: TradingTimeframe,
+  exchangeTimezone: string | null,
+): number | null {
+  if (typeof value !== "string") return null;
+  const datetime = value.trim();
+
+  if (timeframe === "1D") {
+    // Twelve Data documents daily bars as exchange-local dates; timezone= is
+    // ignored for intervals of one day or longer.
+    const match = datetime.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match || !exchangeTimezone) return null;
+    const [, year, month, day] = match;
+    const parts: WallClockParts = {
+      year: Number(year),
+      month: Number(month),
+      day: Number(day),
+      hour: 0,
+      minute: 0,
+      second: 0,
+    };
+    return wallClockToTimestamp(parts, exchangeTimezone);
   }
 
-  const match = value.match(
-    /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/,
+  // The request explicitly sets timezone=UTC for intraday intervals. Twelve
+  // Data returns "YYYY-MM-DD HH:mm:ss" without a zone suffix for that setting.
+  const match = datetime.match(
+    /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/,
   );
   if (!match) return null;
-  const [, year, month, day, hour = "00", minute = "00", second = "00"] = match;
-  const parts = [Number(year), Number(month), Number(day), Number(hour), Number(minute), Number(second)];
-  if (
-    parts.some((part) => !Number.isInteger(part)) ||
-    parts[1] < 1 || parts[1] > 12 || parts[2] < 1 || parts[2] > 31 ||
-    parts[3] > 23 || parts[4] > 59 || parts[5] > 59
-  ) return null;
-
-  const [y, m, d, h, min, s] = parts;
-  const utcGuess = Date.UTC(y, m - 1, d, h, min, s);
-  try {
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    });
-    let candidate = utcGuess;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const formatted = Object.fromEntries(
-        formatter.formatToParts(new Date(candidate)).map(({ type, value: part }) => [type, part]),
-      );
-      const representedAsUtc = Date.UTC(
-        Number(formatted.year),
-        Number(formatted.month) - 1,
-        Number(formatted.day),
-        Number(formatted.hour),
-        Number(formatted.minute),
-        Number(formatted.second),
-      );
-      candidate = utcGuess - (representedAsUtc - candidate);
-    }
-    return Number.isSafeInteger(candidate) ? candidate : null;
-  } catch {
-    return null;
-  }
-}
-
-function parseProviderTimestamp(value: unknown, timeZone: string): number | null {
-  if (typeof value !== "string") return null;
-  const timestamp = parseLocalDateTime(value.trim(), timeZone);
-  return timestamp != null && Number.isSafeInteger(timestamp) && timestamp > 0
-    ? timestamp
-    : null;
+  const [, year, month, day, hour, minute, second] = match;
+  return wallClockToTimestamp({
+    year: Number(year),
+    month: Number(month),
+    day: Number(day),
+    hour: Number(hour),
+    minute: Number(minute),
+    second: Number(second),
+  }, "UTC");
 }
 
 function tickerKey(value: string): string {
@@ -237,14 +219,14 @@ export class TwelveDataProvider implements MarketDataProvider {
     instrument: ProviderSymbol,
     timeframe: TradingTimeframe,
   ): Promise<ProviderCandleSeries> {
-    const response = await this.request("time_series", instrument, {
+    const parameters: Record<string, string> = {
       interval: TIMEFRAME_INTERVAL[timeframe],
       outputsize: String(MAX_CANDLES),
-      timezone: "UTC",
-    });
+    };
+    if (timeframe !== "1D") parameters.timezone = "UTC";
+    const response = await this.request("time_series", instrument, parameters);
     const meta = isObject(response.meta) ? response.meta : null;
     const values = response.values;
-    const timezone = stringValue(meta?.exchange_timezone) ?? "UTC";
     if (!meta || !Array.isArray(values) || values.length > MAX_CANDLES) {
       throw new MarketDataProviderError(
         "invalid_response",
@@ -252,6 +234,13 @@ export class TwelveDataProvider implements MarketDataProvider {
       );
     }
     validateProviderSymbol(meta, instrument);
+    const exchangeTimezone = stringValue(meta.exchange_timezone);
+    if (timeframe === "1D" && !exchangeTimezone) {
+      throw new MarketDataProviderError(
+        "invalid_response",
+        "The daily candle response is missing its exchange timezone.",
+      );
+    }
 
     const candles: TradingCandle[] = [];
     for (const value of values) {
@@ -261,7 +250,7 @@ export class TwelveDataProvider implements MarketDataProvider {
           "The market-data provider returned a malformed candle.",
         );
       }
-      const timestamp = parseProviderTimestamp(value.datetime, timezone);
+      const timestamp = parseProviderTimestamp(value.datetime, timeframe, exchangeTimezone);
       const open = numericValue(value.open);
       const high = numericValue(value.high);
       const low = numericValue(value.low);
@@ -303,7 +292,7 @@ export class TwelveDataProvider implements MarketDataProvider {
     return {
       symbol: stringValue(meta.symbol) ?? instrument.symbol,
       exchange: stringValue(meta.exchange),
-      exchangeTimezone: timezone,
+      exchangeTimezone: exchangeTimezone ?? "UTC",
       candles,
     };
   }
