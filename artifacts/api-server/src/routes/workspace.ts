@@ -1,7 +1,12 @@
 import { Router, type IRouter } from "express";
-import { GetWorkspaceAccessResponse } from "@workspace/api-zod";
+import {
+  AnalyzeTradingBody,
+  AnalyzeTradingResponse,
+  GetWorkspaceAccessResponse,
+} from "@workspace/api-zod";
 import { createRequireApprovedMembership } from "../middlewares/require-membership";
 import type { MembershipClientProvider } from "../middlewares/require-membership";
+import { analyzeTrading, TradingInputError } from "../lib/trading-analysis";
 
 export function createWorkspaceRouter(
   provideClient?: MembershipClientProvider,
@@ -34,6 +39,25 @@ export function createWorkspaceRouter(
       );
     },
   );
+
+  router.post("/workspace/trading/analyze", (req, res): void => {
+    const parsed = AnalyzeTradingBody.safeParse(req.body);
+    if (!parsed.success) {
+      req.log.warn({ errors: parsed.error.issues.length }, "Rejected invalid trading analysis input");
+      res.status(400).json({ error: "Symbol or candle data is invalid." });
+      return;
+    }
+
+    try {
+      res.json(AnalyzeTradingResponse.parse(analyzeTrading(parsed.data)));
+    } catch (error) {
+      if (error instanceof TradingInputError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      throw error;
+    }
+  });
 
   return router;
 }

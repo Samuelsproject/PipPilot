@@ -61,6 +61,51 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MembershipAccessErrorResponse"
+  /workspace/trading/analyze:
+    post:
+      operationId: analyzeTrading
+      tags: [workspace]
+      summary: Analyze user-supplied candles for trading structure
+      description: Performs deterministic multi-timeframe technical analysis on supplied historical candles. It does not fetch live market data or execute orders.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingAnalysisInput"
+      responses:
+        "200":
+          description: Analysis results or an explicit no-trade result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingAnalysisResponse"
+        "400":
+          description: Invalid symbol or candle data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingAnalysisErrorResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
+        "403":
+          description: Email verification or approved membership is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
+        "503":
+          description: Membership authorization is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
   /admin/initialize:
     post:
       operationId: initializeAdmin
@@ -344,6 +389,281 @@ components:
         success:
           type: boolean
     AdminErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    TradingCandle:
+      type: object
+      required: [timestamp, open, high, low, close]
+      properties:
+        timestamp:
+          type: integer
+          minimum: 1
+          description: Candle open time as Unix milliseconds
+        open:
+          type: number
+          exclusiveMinimum: 0
+        high:
+          type: number
+          exclusiveMinimum: 0
+        low:
+          type: number
+          exclusiveMinimum: 0
+        close:
+          type: number
+          exclusiveMinimum: 0
+        volume:
+          type: number
+          minimum: 0
+    TradingAnalysisInput:
+      type: object
+      required: [symbol, timeframes]
+      properties:
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Broker-specific symbol, for example XAUUSDm, BTCUSD.a, or US30.cash
+        timeframes:
+          type: object
+          properties:
+            30M:
+              type: array
+              maxItems: 200
+              items:
+                $ref: "#/components/schemas/TradingCandle"
+            1H:
+              type: array
+              maxItems: 200
+              items:
+                $ref: "#/components/schemas/TradingCandle"
+            4H:
+              type: array
+              maxItems: 200
+              items:
+                $ref: "#/components/schemas/TradingCandle"
+            1D:
+              type: array
+              maxItems: 200
+              items:
+                $ref: "#/components/schemas/TradingCandle"
+    TradingBias:
+      type: string
+      enum: [bullish, bearish, neutral, unavailable]
+    TradingDirection:
+      type: string
+      enum: [bullish, bearish, neutral]
+    TradingTimeframe:
+      type: string
+      enum: [30M, 1H, 4H, 1D]
+    TradingConcept:
+      type: object
+      required: [kind, direction, evidence]
+      properties:
+        kind:
+          type: string
+          enum:
+            - BOS
+            - CHOCH
+            - HH_HL
+            - LH_LL
+            - LIQUIDITY_SWEEP
+            - EQUAL_HIGHS
+            - EQUAL_LOWS
+            - INDUCEMENT
+            - ORDER_BLOCK
+            - FAIR_VALUE_GAP
+            - SUPPLY_DEMAND
+            - SUPPORT_RESISTANCE
+            - PREMIUM_DISCOUNT
+            - DISPLACEMENT
+            - CRT_INTRADAY
+            - CRT_SWING
+        direction:
+          $ref: "#/components/schemas/TradingDirection"
+        low:
+          type: ["number", "null"]
+        high:
+          type: ["number", "null"]
+        evidence:
+          type: string
+    TradingIndicators:
+      type: object
+      required: [atr14, ema20, ema50, rsi14]
+      properties:
+        atr14:
+          type: number
+        ema20:
+          type: number
+        ema50:
+          type: number
+        rsi14:
+          type: number
+    TradingTimeframeAnalysis:
+      type: object
+      required: [timeframe, dataStatus, bias, structure, concepts, indicators]
+      properties:
+        timeframe:
+          $ref: "#/components/schemas/TradingTimeframe"
+        dataStatus:
+          type: string
+          enum: [available, missing, insufficient, stale]
+        bias:
+          $ref: "#/components/schemas/TradingBias"
+        structure:
+          type: string
+        concepts:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradingConcept"
+        indicators:
+          oneOf:
+            - $ref: "#/components/schemas/TradingIndicators"
+            - type: "null"
+    TradingTarget:
+      type: object
+      required: [label, price, riskReward]
+      properties:
+        label:
+          type: string
+          enum: [TP1, TP2, TP3]
+        price:
+          type: number
+        riskReward:
+          type: number
+    TradingSignal:
+      type: object
+      required:
+        - decision
+        - status
+        - setupTimeframe
+        - entryPrice
+        - entryLow
+        - entryHigh
+        - stopLoss
+        - targets
+        - confidence
+        - confidenceExplanation
+        - evidence
+        - invalidationConditions
+        - expiresAt
+      properties:
+        decision:
+          type: string
+          enum: [BUY, SELL, NO_TRADE]
+        status:
+          type: string
+          enum: [valid, stale, expired, unavailable]
+        setupTimeframe:
+          $ref: "#/components/schemas/TradingTimeframe"
+        entryPrice:
+          type: ["number", "null"]
+        entryLow:
+          type: ["number", "null"]
+        entryHigh:
+          type: ["number", "null"]
+        stopLoss:
+          type: ["number", "null"]
+        targets:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/TradingTarget"
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Confluence score, not probability of profit
+        confidenceExplanation:
+          type: string
+        evidence:
+          type: array
+          items:
+            type: string
+        invalidationConditions:
+          type: array
+          items:
+            type: string
+        expiresAt:
+          type: ["integer", "null"]
+    TradingMacroContext:
+      type: object
+      required: [status, supportedEvents, excludedEvent, hypothesisPercent, explanation]
+      properties:
+        status:
+          type: string
+          enum: [unavailable]
+        supportedEvents:
+          type: array
+          items:
+            type: string
+            enum: [CPI, PPI, NFP, FOMC]
+        excludedEvent:
+          type: string
+          enum: [PCE]
+        hypothesisPercent:
+          type: ["integer", "null"]
+        explanation:
+          type: string
+    TradingAnalysisResponse:
+      type: object
+      required:
+        - requestedSymbol
+        - canonicalSymbol
+        - instrumentClass
+        - marketSchedule
+        - dataSource
+        - analysisTimestamp
+        - lastMarketTimestamp
+        - marketFreshness
+        - currentPrice
+        - higherTimeframeBias
+        - conflicts
+        - timeframes
+        - signal
+        - macroContext
+      properties:
+        requestedSymbol:
+          type: string
+        canonicalSymbol:
+          type: ["string", "null"]
+        instrumentClass:
+          type: string
+          enum: [gold, bitcoin, forex, index, unsupported]
+        marketSchedule:
+          type: string
+          enum: [continuous_24_7, broker_defined, fx_weekdays, unavailable]
+        dataSource:
+          type: string
+          enum: [user_supplied_historical, unavailable]
+        analysisTimestamp:
+          type: integer
+        lastMarketTimestamp:
+          type: ["integer", "null"]
+        marketFreshness:
+          type: string
+          enum: [fresh, stale, unavailable]
+        currentPrice:
+          type: ["number", "null"]
+        higherTimeframeBias:
+          $ref: "#/components/schemas/TradingBias"
+        conflicts:
+          type: array
+          items:
+            type: string
+        timeframes:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/TradingTimeframeAnalysis"
+        signal:
+          $ref: "#/components/schemas/TradingSignal"
+        macroContext:
+          $ref: "#/components/schemas/TradingMacroContext"
+    TradingAnalysisErrorResponse:
       type: object
       required: [error]
       properties:

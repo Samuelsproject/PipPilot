@@ -28,6 +28,174 @@ export const GetWorkspaceAccessResponse = zod.object({
 
 
 /**
+ * Performs deterministic multi-timeframe technical analysis on supplied historical candles. It does not fetch live market data or execute orders.
+ * @summary Analyze user-supplied candles for trading structure
+ */
+export const analyzeTradingBodySymbolMax = 64;
+
+
+export const analyzeTradingBodyTimeframes30MItemOpenExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes30MItemHighExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes30MItemLowExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes30MItemCloseExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes30MItemVolumeMin = 0;
+
+export const analyzeTradingBodyTimeframes30MMax = 200;
+
+
+export const analyzeTradingBodyTimeframes1HItemOpenExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes1HItemHighExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes1HItemLowExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes1HItemCloseExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes1HItemVolumeMin = 0;
+
+export const analyzeTradingBodyTimeframes1HMax = 200;
+
+
+export const analyzeTradingBodyTimeframes4HItemOpenExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes4HItemHighExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes4HItemLowExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes4HItemCloseExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes4HItemVolumeMin = 0;
+
+export const analyzeTradingBodyTimeframes4HMax = 200;
+
+
+export const analyzeTradingBodyTimeframes1DItemOpenExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes1DItemHighExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes1DItemLowExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes1DItemCloseExclusiveMin = 0;
+
+export const analyzeTradingBodyTimeframes1DItemVolumeMin = 0;
+
+export const analyzeTradingBodyTimeframes1DMax = 200;
+
+
+
+export const AnalyzeTradingBody = zod.object({
+  "symbol": zod.string().min(1).max(analyzeTradingBodySymbolMax).describe('Broker-specific symbol, for example XAUUSDm, BTCUSD.a, or US30.cash'),
+  "timeframes": zod.object({
+  "30M": zod.array(zod.object({
+  "timestamp": zod.number().int().min(1).describe('Candle open time as Unix milliseconds'),
+  "open": zod.number().gt(analyzeTradingBodyTimeframes30MItemOpenExclusiveMin),
+  "high": zod.number().gt(analyzeTradingBodyTimeframes30MItemHighExclusiveMin),
+  "low": zod.number().gt(analyzeTradingBodyTimeframes30MItemLowExclusiveMin),
+  "close": zod.number().gt(analyzeTradingBodyTimeframes30MItemCloseExclusiveMin),
+  "volume": zod.number().min(analyzeTradingBodyTimeframes30MItemVolumeMin).optional()
+})).max(analyzeTradingBodyTimeframes30MMax).optional(),
+  "1H": zod.array(zod.object({
+  "timestamp": zod.number().int().min(1).describe('Candle open time as Unix milliseconds'),
+  "open": zod.number().gt(analyzeTradingBodyTimeframes1HItemOpenExclusiveMin),
+  "high": zod.number().gt(analyzeTradingBodyTimeframes1HItemHighExclusiveMin),
+  "low": zod.number().gt(analyzeTradingBodyTimeframes1HItemLowExclusiveMin),
+  "close": zod.number().gt(analyzeTradingBodyTimeframes1HItemCloseExclusiveMin),
+  "volume": zod.number().min(analyzeTradingBodyTimeframes1HItemVolumeMin).optional()
+})).max(analyzeTradingBodyTimeframes1HMax).optional(),
+  "4H": zod.array(zod.object({
+  "timestamp": zod.number().int().min(1).describe('Candle open time as Unix milliseconds'),
+  "open": zod.number().gt(analyzeTradingBodyTimeframes4HItemOpenExclusiveMin),
+  "high": zod.number().gt(analyzeTradingBodyTimeframes4HItemHighExclusiveMin),
+  "low": zod.number().gt(analyzeTradingBodyTimeframes4HItemLowExclusiveMin),
+  "close": zod.number().gt(analyzeTradingBodyTimeframes4HItemCloseExclusiveMin),
+  "volume": zod.number().min(analyzeTradingBodyTimeframes4HItemVolumeMin).optional()
+})).max(analyzeTradingBodyTimeframes4HMax).optional(),
+  "1D": zod.array(zod.object({
+  "timestamp": zod.number().int().min(1).describe('Candle open time as Unix milliseconds'),
+  "open": zod.number().gt(analyzeTradingBodyTimeframes1DItemOpenExclusiveMin),
+  "high": zod.number().gt(analyzeTradingBodyTimeframes1DItemHighExclusiveMin),
+  "low": zod.number().gt(analyzeTradingBodyTimeframes1DItemLowExclusiveMin),
+  "close": zod.number().gt(analyzeTradingBodyTimeframes1DItemCloseExclusiveMin),
+  "volume": zod.number().min(analyzeTradingBodyTimeframes1DItemVolumeMin).optional()
+})).max(analyzeTradingBodyTimeframes1DMax).optional()
+})
+})
+
+export const analyzeTradingResponseTimeframesMin = 4;
+export const analyzeTradingResponseTimeframesMax = 4;
+
+export const analyzeTradingResponseSignalTargetsMax = 3;
+
+export const analyzeTradingResponseSignalConfidenceMin = 0;
+export const analyzeTradingResponseSignalConfidenceMax = 100;
+
+
+
+export const AnalyzeTradingResponse = zod.object({
+  "requestedSymbol": zod.string(),
+  "canonicalSymbol": zod.string().nullable(),
+  "instrumentClass": zod.enum(['gold', 'bitcoin', 'forex', 'index', 'unsupported']),
+  "marketSchedule": zod.enum(['continuous_24_7', 'broker_defined', 'fx_weekdays', 'unavailable']),
+  "dataSource": zod.enum(['user_supplied_historical', 'unavailable']),
+  "analysisTimestamp": zod.number().int(),
+  "lastMarketTimestamp": zod.number().int().nullable(),
+  "marketFreshness": zod.enum(['fresh', 'stale', 'unavailable']),
+  "currentPrice": zod.number().nullable(),
+  "higherTimeframeBias": zod.enum(['bullish', 'bearish', 'neutral', 'unavailable']),
+  "conflicts": zod.array(zod.string()),
+  "timeframes": zod.array(zod.object({
+  "timeframe": zod.enum(['30M', '1H', '4H', '1D']),
+  "dataStatus": zod.enum(['available', 'missing', 'insufficient', 'stale']),
+  "bias": zod.enum(['bullish', 'bearish', 'neutral', 'unavailable']),
+  "structure": zod.string(),
+  "concepts": zod.array(zod.object({
+  "kind": zod.enum(['BOS', 'CHOCH', 'HH_HL', 'LH_LL', 'LIQUIDITY_SWEEP', 'EQUAL_HIGHS', 'EQUAL_LOWS', 'INDUCEMENT', 'ORDER_BLOCK', 'FAIR_VALUE_GAP', 'SUPPLY_DEMAND', 'SUPPORT_RESISTANCE', 'PREMIUM_DISCOUNT', 'DISPLACEMENT', 'CRT_INTRADAY', 'CRT_SWING']),
+  "direction": zod.enum(['bullish', 'bearish', 'neutral']),
+  "low": zod.number().nullish(),
+  "high": zod.number().nullish(),
+  "evidence": zod.string()
+})),
+  "indicators": zod.union([zod.object({
+  "atr14": zod.number(),
+  "ema20": zod.number(),
+  "ema50": zod.number(),
+  "rsi14": zod.number()
+}),zod.null()])
+})).min(analyzeTradingResponseTimeframesMin).max(analyzeTradingResponseTimeframesMax),
+  "signal": zod.object({
+  "decision": zod.enum(['BUY', 'SELL', 'NO_TRADE']),
+  "status": zod.enum(['valid', 'stale', 'expired', 'unavailable']),
+  "setupTimeframe": zod.enum(['30M', '1H', '4H', '1D']),
+  "entryPrice": zod.number().nullable(),
+  "entryLow": zod.number().nullable(),
+  "entryHigh": zod.number().nullable(),
+  "stopLoss": zod.number().nullable(),
+  "targets": zod.array(zod.object({
+  "label": zod.enum(['TP1', 'TP2', 'TP3']),
+  "price": zod.number(),
+  "riskReward": zod.number()
+})).max(analyzeTradingResponseSignalTargetsMax),
+  "confidence": zod.number().int().min(analyzeTradingResponseSignalConfidenceMin).max(analyzeTradingResponseSignalConfidenceMax).describe('Confluence score, not probability of profit'),
+  "confidenceExplanation": zod.string(),
+  "evidence": zod.array(zod.string()),
+  "invalidationConditions": zod.array(zod.string()),
+  "expiresAt": zod.number().int().nullable()
+}),
+  "macroContext": zod.object({
+  "status": zod.enum(['unavailable']),
+  "supportedEvents": zod.array(zod.enum(['CPI', 'PPI', 'NFP', 'FOMC'])),
+  "excludedEvent": zod.enum(['PCE']),
+  "hypothesisPercent": zod.number().int().nullable(),
+  "explanation": zod.string()
+})
+})
+
+
+/**
  * Explicitly initialize server-managed admin metadata for the authenticated designated administrator. The account identity and metadata are derived server-side.
  * @summary Initialize the verified designated administrator
  */

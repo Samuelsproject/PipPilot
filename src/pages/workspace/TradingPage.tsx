@@ -1,402 +1,350 @@
-import React, { useState } from 'react';
-import {
-  Activity,
-  AlertTriangle,
-  Check,
-  CheckCircle2,
-  Cpu,
-  Workflow,
-  XCircle,
-} from 'lucide-react';
-import {
-  AssetSymbol,
-  SAMPLE_WATCHLIST,
-  TimeframeOption,
-} from '../../data/workspaceData';
+import { useState } from "react";
+import { useAnalyzeTrading } from "@workspace/api-client-react";
+import type {
+  TradingAnalysisInputTimeframes,
+  TradingAnalysisResponse,
+  TradingTimeframe,
+} from "@workspace/api-client-react";
+import { AlertTriangle, FileUp, LoaderCircle, ShieldCheck } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+import { parseMarketCandlesCsv } from "../../lib/market-data-csv";
 
-export const TradingPage: React.FC = () => {
-  const [selectedAsset, setSelectedAsset] = useState<AssetSymbol>('XAU/USD');
-  const [timeframe, setTimeframe] = useState<TimeframeOption>('M15');
-  const [approvalStatus, setApprovalStatus] = useState<
-    'PENDING' | 'APPROVED' | 'REJECTED' | 'MT5_VALIDATED'
-  >('PENDING');
-  const [showNoTradeDemo, setShowNoTradeDemo] = useState(false);
+const TIMEFRAMES: TradingTimeframe[] = ["1D", "4H", "1H", "30M"];
+const TIMEFRAME_DESCRIPTIONS: Record<TradingTimeframe, string> = {
+  "1D": "Overall directional bias and major structure",
+  "4H": "Intermediate structure, zones, and liquidity",
+  "1H": "Directional confirmation and developing setup",
+  "30M": "Entry trigger, stop, and invalidation",
+};
 
-  const assetDetails =
-    SAMPLE_WATCHLIST.find((a) => a.symbol === selectedAsset) ?? SAMPLE_WATCHLIST[0];
+interface ImportedTimeframe {
+  fileName: string;
+  candles: NonNullable<TradingAnalysisInputTimeframes["30M"]>;
+  warnings: string[];
+}
+
+function formatPrice(value: number | null | undefined): string {
+  return value == null
+    ? "—"
+    : new Intl.NumberFormat(undefined, { maximumFractionDigits: 8 }).format(value);
+}
+
+function formatDate(timestamp: number | null | undefined): string {
+  if (timestamp == null) return "Unavailable";
+  return new Date(timestamp).toLocaleString();
+}
+
+function biasColor(bias: string): string {
+  if (bias === "bullish") return "text-[#16A36A]";
+  if (bias === "bearish") return "text-[#E05252]";
+  if (bias === "neutral") return "text-[#E69A36]";
+  return "text-[#A9BEB5]";
+}
+
+function AnalysisResults({ analysis }: { analysis: TradingAnalysisResponse }) {
+  const signal = analysis.signal;
+  const decisionColor = signal.decision === "BUY"
+    ? "text-[#16A36A] border-[#16A36A]/40 bg-[#16A36A]/10"
+    : signal.decision === "SELL"
+      ? "text-[#E05252] border-[#E05252]/40 bg-[#E05252]/10"
+      : "text-[#E69A36] border-[#E69A36]/40 bg-[#E69A36]/10";
+
+  return (
+    <div className="space-y-4" data-testid="trading-analysis-results">
+      <section className="rounded-2xl border border-[#1A363E] bg-[#152B30] p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-wider text-[#168BFF]">Imported candle analysis</p>
+            <h2 className="mt-1 text-lg font-bold text-[#E8F2EE]">
+              {analysis.requestedSymbol}
+              {analysis.canonicalSymbol && analysis.canonicalSymbol !== analysis.requestedSymbol.toUpperCase()
+                ? <span className="ml-2 text-sm font-medium text-[#A9BEB5]">→ {analysis.canonicalSymbol}</span>
+                : null}
+            </h2>
+            <p className="mt-1 text-xs text-[#A9BEB5]">
+              {analysis.instrumentClass} · {analysis.marketSchedule.replaceAll("_", " ")}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xl font-mono font-bold text-[#168BFF]">{formatPrice(analysis.currentPrice)}</p>
+            <p className="text-[10px] text-[#A9BEB5]">latest imported close · {formatDate(analysis.lastMarketTimestamp)}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+          <span className="rounded-full border border-[#168BFF]/30 bg-[#168BFF]/10 px-2.5 py-1 text-[#168BFF]">
+            User-supplied historical data
+          </span>
+          <span className={`rounded-full border px-2.5 py-1 ${analysis.marketFreshness === "fresh"
+            ? "border-[#16A36A]/30 bg-[#16A36A]/10 text-[#16A36A]"
+            : "border-[#E69A36]/30 bg-[#E69A36]/10 text-[#E69A36]"}`}>
+            Data {analysis.marketFreshness}
+          </span>
+          <span className="rounded-full border border-[#1A363E] px-2.5 py-1 text-[#A9BEB5]">
+            Analysis {formatDate(analysis.analysisTimestamp)}
+          </span>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-[#1A363E] bg-[#152B30] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-[#E8F2EE]">Top-down structure</h3>
+          <span className={`text-xs font-mono font-bold uppercase ${biasColor(analysis.higherTimeframeBias)}`}>
+            Higher-timeframe bias: {analysis.higherTimeframeBias}
+          </span>
+        </div>
+        {analysis.conflicts.length > 0 && (
+          <div className="mt-3 rounded-xl border border-[#E69A36]/30 bg-[#E69A36]/10 p-3 text-xs text-[#E8B75A]" data-testid="status-timeframe-conflict">
+            <div className="mb-1 flex items-center gap-2 font-semibold"><AlertTriangle className="size-4" /> Timeframe conflict</div>
+            {analysis.conflicts.map((conflict) => <p key={conflict}>{conflict}</p>)}
+          </div>
+        )}
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {analysis.timeframes.map((timeframe) => (
+            <article key={timeframe.timeframe} className="rounded-xl border border-[#1A363E] bg-[#101B20] p-3" data-testid={`card-timeframe-${timeframe.timeframe}`}>
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-mono text-sm font-bold text-[#E8F2EE]">{timeframe.timeframe}</h4>
+                <span className={`text-[10px] font-bold uppercase ${biasColor(timeframe.bias)}`}>{timeframe.bias}</span>
+              </div>
+              <p className="mt-1 text-[10px] text-[#A9BEB5]">{TIMEFRAME_DESCRIPTIONS[timeframe.timeframe]}</p>
+              <p className="mt-2 text-xs text-[#E8F2EE]">{timeframe.structure}</p>
+              <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[9px] uppercase ${
+                timeframe.dataStatus === "available"
+                  ? "border-[#16A36A]/30 text-[#16A36A]"
+                  : "border-[#E69A36]/30 text-[#E69A36]"
+              }`}>{timeframe.dataStatus} data</span>
+              {timeframe.indicators && (
+                <p className="mt-2 text-[10px] font-mono text-[#168BFF]">
+                  ATR {formatPrice(timeframe.indicators.atr14)} · RSI {timeframe.indicators.rsi14.toFixed(1)} · EMA20/50 {formatPrice(timeframe.indicators.ema20)}/{formatPrice(timeframe.indicators.ema50)}
+                </p>
+              )}
+              {timeframe.concepts.length > 0 && (
+                <ul className="mt-2 space-y-1.5 border-t border-[#1A363E] pt-2">
+                  {timeframe.concepts.map((concept, index) => (
+                    <li key={`${concept.kind}-${index}`} className="text-[10px] leading-relaxed text-[#A9BEB5]">
+                      <span className="font-bold text-[#E8F2EE]">{concept.kind.replaceAll("_", " ")}</span>
+                      {concept.low != null && concept.high != null && (
+                        <span className="ml-1 font-mono text-[#168BFF]">{formatPrice(concept.low)}–{formatPrice(concept.high)}</span>
+                      )}
+                      <span className="block">{concept.evidence}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-[#1A363E] bg-[#152B30] p-4" data-testid="card-trading-signal">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-wider text-[#A9BEB5]">30M setup · manual review only</p>
+            <span className={`mt-1 inline-flex rounded-lg border px-3 py-1 text-sm font-extrabold ${decisionColor}`} data-testid="status-trading-decision">
+              {signal.decision}
+            </span>
+          </div>
+          <span className="text-[10px] uppercase text-[#A9BEB5]">Signal state: {signal.status}</span>
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-[#A9BEB5]">{signal.confidenceExplanation}</p>
+        {signal.decision !== "NO_TRADE" && (
+          <>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-lg bg-[#101B20] p-2">
+                <span className="block text-[9px] text-[#A9BEB5]">Entry</span>
+                <strong className="font-mono text-xs text-[#E8F2EE]">{formatPrice(signal.entryPrice)}</strong>
+                {signal.entryLow !== signal.entryHigh && <span className="block text-[9px] text-[#A9BEB5]">{formatPrice(signal.entryLow)}–{formatPrice(signal.entryHigh)}</span>}
+              </div>
+              <div className="rounded-lg bg-[#101B20] p-2">
+                <span className="block text-[9px] text-[#E05252]">Stop-loss</span>
+                <strong className="font-mono text-xs text-[#E8F2EE]">{formatPrice(signal.stopLoss)}</strong>
+              </div>
+              {signal.targets.map((target) => (
+                <div key={target.label} className="rounded-lg bg-[#101B20] p-2">
+                  <span className="block text-[9px] text-[#16A36A]">{target.label} · {target.riskReward}:1 R:R</span>
+                  <strong className="font-mono text-xs text-[#E8F2EE]">{formatPrice(target.price)}</strong>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-[#A9BEB5]">Stop is beyond the recent 30M range with an ATR buffer. Targets are calculated risk multiples, not price forecasts.</p>
+            <p className="mt-1 text-[10px] text-[#A9BEB5]">Expires: {formatDate(signal.expiresAt)}</p>
+          </>
+        )}
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <h4 className="text-[10px] font-bold uppercase text-[#A9BEB5]">Evidence</h4>
+            <ul className="mt-1 space-y-1 text-[10px] text-[#E8F2EE]">
+              {signal.evidence.length ? signal.evidence.map((item) => <li key={item}>• {item}</li>) : <li>No confirmed setup evidence.</li>}
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-[10px] font-bold uppercase text-[#A9BEB5]">Invalidation / review</h4>
+            <ul className="mt-1 space-y-1 text-[10px] text-[#E8F2EE]">
+              {signal.invalidationConditions.map((item) => <li key={item}>• {item}</li>)}
+            </ul>
+          </div>
+        </div>
+        <p className="mt-3 flex items-center gap-2 border-t border-[#1A363E] pt-3 text-[10px] text-[#A9BEB5]">
+          <ShieldCheck className="size-4 shrink-0 text-[#16A36A]" />
+          No orders are placed. This analysis is informational and does not promise profitability.
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-[#1A363E] bg-[#152B30] p-4">
+        <h3 className="text-sm font-bold text-[#E8F2EE]">News & macro context</h3>
+        <p className="mt-1 text-xs text-[#A9BEB5]">{analysis.macroContext.explanation}</p>
+        <p className="mt-2 text-[10px] font-mono text-[#168BFF]">
+          Monitored when a reliable feed is connected: {analysis.macroContext.supportedEvents.join(" · ")}. PCE excluded.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+export const TradingPage = () => {
+  const { session } = useAuth();
+  const [symbol, setSymbol] = useState("XAUUSD");
+  const [imports, setImports] = useState<Partial<Record<TradingTimeframe, ImportedTimeframe>>>({});
+  const [importError, setImportError] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<TradingAnalysisResponse | null>(null);
+  const analyze = useAnalyzeTrading({
+    request: session?.access_token
+      ? { headers: { Authorization: `Bearer ${session.access_token}` } }
+      : undefined,
+  });
+
+  const handleFile = async (timeframe: TradingTimeframe, file?: File) => {
+    setImportError(null);
+    setAnalysis(null);
+    if (!file) {
+      setImports((current) => {
+        const next = { ...current };
+        delete next[timeframe];
+        return next;
+      });
+      return;
+    }
+    try {
+      const parsed = parseMarketCandlesCsv(await file.text());
+      setImports((current) => ({
+        ...current,
+        [timeframe]: { fileName: file.name, ...parsed },
+      }));
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "This CSV could not be read.");
+      setImports((current) => {
+        const next = { ...current };
+        delete next[timeframe];
+        return next;
+      });
+    }
+  };
+
+  const submitAnalysis = () => {
+    const timeframes: TradingAnalysisInputTimeframes = {};
+    for (const timeframe of TIMEFRAMES) {
+      const file = imports[timeframe];
+      if (file) timeframes[timeframe] = file.candles;
+    }
+    setAnalysis(null);
+    analyze.mutate({ data: { symbol: symbol.trim(), timeframes } }, {
+      onSuccess: (result) => setAnalysis(result),
+    });
+  };
+
+  const complete = TIMEFRAMES.every((timeframe) =>
+    (imports[timeframe]?.candles.length ?? 0) >= 20,
+  );
 
   return (
     <div className="space-y-5">
-      {/* Instrument & Multi-Timeframe Controls */}
-      <div className="bg-[#152B30] border border-[#1A363E] rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1 bg-[#101B20] p-1 rounded-xl border border-[#1A363E]">
-          {(['XAU/USD', 'EUR/USD', 'GBP/USD', 'US30'] as const).map((asset) => (
-            <button
-              key={asset}
-              type="button"
-              onClick={() => {
-                setSelectedAsset(asset);
-                setApprovalStatus('PENDING');
+      <header className="rounded-2xl border border-[#1A363E] bg-[#152B30] p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#168BFF]">Trading intelligence · structural analysis</p>
+            <h1 className="mt-1 text-xl font-extrabold text-[#E8F2EE]">Multi-timeframe market review</h1>
+            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-[#A9BEB5]">
+              Import your broker’s candle exports for 30M, 1H, 4H, and 1D. Analysis uses only those supplied historical bars; no live or delayed market feed is connected.
+            </p>
+          </div>
+          <span className="rounded-full border border-[#E69A36]/30 bg-[#E69A36]/10 px-3 py-1.5 text-[10px] font-bold uppercase text-[#E69A36]">
+            Data provider unavailable
+          </span>
+        </div>
+      </header>
+
+      <section className="rounded-2xl border border-[#1A363E] bg-[#152B30] p-4 sm:p-5">
+        <div className="grid gap-4 lg:grid-cols-[minmax(180px,0.7fr)_2fr]">
+          <label className="block text-xs font-semibold text-[#E8F2EE]">
+            Broker symbol
+            <input
+              type="text"
+              value={symbol}
+              onChange={(event) => {
+                setSymbol(event.target.value);
+                setAnalysis(null);
               }}
-              className={`px-3 py-1.5 text-xs font-mono font-semibold rounded-lg transition-all ${
-                selectedAsset === asset
-                  ? 'bg-[#16A36A] text-[#E8F2EE] shadow-sm'
-                  : 'text-[#A9BEB5] hover:text-[#E8F2EE]'
-              }`}
-            >
-              {asset}
-            </button>
-          ))}
-        </div>
+              placeholder="e.g. XAUUSDm, BTCUSD.a, US30.cash"
+              data-testid="input-trading-symbol"
+              className="mt-2 min-h-11 w-full rounded-xl border border-[#1A363E] bg-[#101B20] px-3 font-mono text-sm text-[#E8F2EE] outline-none focus:border-[#168BFF]"
+            />
+            <span className="mt-1 block text-[10px] font-normal text-[#A9BEB5]">
+              Gold, BTC pairs, FX pairs, US30, US100 and common broker aliases
+            </span>
+          </label>
 
-        <div className="flex flex-wrap items-center gap-1 bg-[#101B20] p-1 rounded-xl border border-[#1A363E]">
-          {(['M5', 'M15', 'H1', 'H4', 'D1'] as const).map((tf) => (
-            <button
-              key={tf}
-              type="button"
-              onClick={() => setTimeframe(tf)}
-              className={`px-2.5 py-1.5 text-xs font-mono font-semibold rounded-md transition-all ${
-                timeframe === tf
-                  ? 'bg-[#168BFF] text-[#E8F2EE]'
-                  : 'text-[#A9BEB5] hover:text-[#E8F2EE]'
-              }`}
-            >
-              {tf}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Trading Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Market Analysis & Multi-Timeframe Confluence Chart */}
-        <div className="lg:col-span-7 space-y-5">
-          {/* Active Asset Info Strip */}
-          <div className="bg-[#152B30] border border-[#1A363E] rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-bold font-mono text-[#E8F2EE]">
-                  {selectedAsset}
-                </h2>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-[#16A36A]/15 text-[#16A36A] border border-[#16A36A]/30 font-semibold">
-                  {assetDetails.bias}
-                </span>
-                <span className="text-xs font-mono text-[#168BFF] font-semibold">
-                  {timeframe}
-                </span>
-              </div>
-              <p className="text-xs text-[#A9BEB5] font-mono mt-0.5">{assetDetails.name}</p>
-            </div>
-            <div className="text-right">
-              <span className="text-xl font-bold font-mono text-[#168BFF]">
-                {assetDetails.price}
-              </span>
-              <p
-                className={`text-xs font-mono ${
-                  assetDetails.positive ? 'text-[#16A36A]' : 'text-[#E05252]'
-                }`}
-              >
-                {assetDetails.change} Session (Simulated)
-              </p>
-            </div>
-          </div>
-
-          {/* Interactive Chart Canvas */}
-          <div className="bg-[#152B30] border border-[#1A363E] rounded-2xl p-4 purple-glow-box space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-[#A9BEB5]">
-              <span className="flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-[#168BFF]" />
-                Structural Confluence View ({timeframe})
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#E69A36]" />
-                <span>Simulated Market Preview</span>
-              </div>
-            </div>
-
-            <div className="relative h-64 sm:h-72 w-full bg-[#101B20] rounded-xl border border-[#1A363E] p-3 flex flex-col justify-between overflow-hidden">
-              <div className="z-10 flex flex-wrap gap-2 text-[10px] font-mono">
-                <span className="bg-[#9560E8]/20 border border-[#9560E8]/40 text-[#E8F2EE] px-2 py-0.5 rounded">
-                  Fair Value Gap (H1)
-                </span>
-                <span className="bg-[#168BFF]/20 border border-[#168BFF]/40 text-[#168BFF] px-2 py-0.5 rounded">
-                  Liquidity Sweep Range
-                </span>
-                <span className="bg-[#16A36A]/20 border border-[#16A36A]/40 text-[#16A36A] px-2 py-0.5 rounded">
-                  Bullish Order Block
-                </span>
-              </div>
-
-              <svg
-                className="w-full h-full relative z-0"
-                viewBox="0 0 600 220"
-                preserveAspectRatio="none"
-                aria-label="Illustrative structural confluence chart"
-              >
-                <defs>
-                  <linearGradient id="tradingChartFvg" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#9560E8" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#9560E8" stopOpacity="0.05" />
-                  </linearGradient>
-                </defs>
-                <line x1="0" y1="50" x2="600" y2="50" stroke="#1A363E" strokeWidth="1" strokeDasharray="4 4" />
-                <line x1="0" y1="110" x2="600" y2="110" stroke="#1A363E" strokeWidth="1" strokeDasharray="4 4" />
-                <line x1="0" y1="170" x2="600" y2="170" stroke="#1A363E" strokeWidth="1" strokeDasharray="4 4" />
-                <rect x="250" y="70" width="180" height="50" fill="url(#tradingChartFvg)" stroke="#9560E8" strokeWidth="1" strokeDasharray="2 2" />
-                <text x="255" y="65" fill="#9560E8" fontSize="10" fontFamily="monospace">ICT Fair Value Gap</text>
-                <line x1="20" y1="160" x2="580" y2="160" stroke="#E69A36" strokeWidth="1" strokeDasharray="3 3" />
-                <text x="30" y="155" fill="#E69A36" fontSize="9" fontFamily="monospace">Asian Session Low Swept</text>
-
-                <line x1="50" y1="80" x2="50" y2="140" stroke="#E05252" strokeWidth="1.5" />
-                <rect x="44" y="90" width="12" height="35" fill="#E05252" rx="1" />
-                <line x1="90" y1="110" x2="90" y2="175" stroke="#E05252" strokeWidth="1.5" />
-                <rect x="84" y="120" width="12" height="42" fill="#E05252" rx="1" />
-                <line x1="130" y1="105" x2="130" y2="185" stroke="#16A36A" strokeWidth="1.5" />
-                <rect x="124" y="110" width="12" height="30" fill="#16A36A" rx="1" />
-                <line x1="180" y1="75" x2="180" y2="145" stroke="#16A36A" strokeWidth="1.5" />
-                <rect x="174" y="80" width="12" height="50" fill="#16A36A" rx="1" />
-                <line x1="230" y1="65" x2="230" y2="115" stroke="#16A36A" strokeWidth="1.5" />
-                <rect x="224" y="70" width="12" height="30" fill="#16A36A" rx="1" />
-                <line x1="280" y1="85" x2="280" y2="125" stroke="#E05252" strokeWidth="1.5" />
-                <rect x="274" y="90" width="12" height="25" fill="#E05252" rx="1" />
-                <line x1="330" y1="60" x2="330" y2="110" stroke="#16A36A" strokeWidth="1.5" />
-                <rect x="324" y="65" width="12" height="35" fill="#16A36A" rx="1" />
-                <line x1="380" y1="40" x2="380" y2="90" stroke="#16A36A" strokeWidth="1.5" />
-                <rect x="374" y="45" width="12" height="35" fill="#16A36A" rx="1" />
-                <line x1="430" y1="35" x2="430" y2="75" stroke="#E69A36" strokeWidth="1.5" />
-                <rect x="424" y="40" width="12" height="20" fill="#E69A36" rx="1" />
-                <line x1="480" y1="20" x2="480" y2="65" stroke="#16A36A" strokeWidth="1.5" />
-                <rect x="474" y="25" width="12" height="30" fill="#16A36A" rx="1" />
-                <line x1="486" y1="30" x2="570" y2="15" stroke="#168BFF" strokeWidth="2" strokeDasharray="3 3" />
-                <circle cx="570" cy="15" r="3" fill="#168BFF" />
-              </svg>
-
-              <div className="z-10 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-[#A9BEB5] pt-1 border-t border-[#1A363E]">
-                <span>
-                  CRT High: {assetDetails.crtHigh} | Low: {assetDetails.crtLow}
-                </span>
-                <span className="text-[#16A36A]">Regime: {assetDetails.regime}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Multi-Timeframe Sync Breakdown */}
-          <div className="bg-[#152B30] border border-[#1A363E] rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="font-bold text-[#E8F2EE]">Multi-Timeframe Alignment</span>
-              <span className="text-[#16A36A]">D1 / H4 / H1 / M15</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono">
-              <div className="p-3 rounded-xl bg-[#101B20] border border-[#1A363E]">
-                <span className="text-[10px] text-[#A9BEB5] block">Daily / H4 Bias</span>
-                <span className="text-[#16A36A] font-bold">Bullish Structure</span>
-              </div>
-              <div className="p-3 rounded-xl bg-[#101B20] border border-[#1A363E]">
-                <span className="text-[10px] text-[#A9BEB5] block">H1 Liquidity</span>
-                <span className="text-[#168BFF] font-bold">Sweep Confirmed</span>
-              </div>
-              <div className="p-3 rounded-xl bg-[#101B20] border border-[#1A363E]">
-                <span className="text-[10px] text-[#A9BEB5] block">M15 Trigger</span>
-                <span className="text-[#9560E8] font-bold">FVG Mitigated</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Entry, Stop-Loss, Take-Profit & Trader Approval */}
-        <div className="lg:col-span-5 space-y-5">
-          <div className="bg-[#152B30] border border-[#1A363E] rounded-2xl p-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setShowNoTradeDemo(false);
-                setApprovalStatus('PENDING');
-              }}
-              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                !showNoTradeDemo
-                  ? 'bg-[#16A36A] text-[#E8F2EE] shadow-sm'
-                  : 'text-[#A9BEB5] hover:text-[#E8F2EE]'
-              }`}
-            >
-              <Cpu className="w-3.5 h-3.5" />
-              <span>Valid Setup</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowNoTradeDemo(true)}
-              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                showNoTradeDemo
-                  ? 'bg-[#E69A36] text-[#101B20] shadow-sm'
-                  : 'text-[#A9BEB5] hover:text-[#E8F2EE]'
-              }`}
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span>'NO TRADE' Filter</span>
-            </button>
-          </div>
-
-          {!showNoTradeDemo ? (
-            <div className="bg-[#152B30] border border-[#16A36A]/40 rounded-2xl p-5 purple-glow-box space-y-4">
-              <div className="flex items-center justify-between border-b border-[#1A363E] pb-3">
-                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[#16A36A]/20 text-[#16A36A] border border-[#16A36A]/40 uppercase">
-                  Pending Trader Review
-                </span>
-                <span className="text-xs font-mono text-[#A9BEB5]">Sample #842</span>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-[#E8F2EE]">
-                    {selectedAsset} Trade Proposal
-                  </h3>
-                  <span className="text-xs font-mono text-[#168BFF] font-bold">
-                    R:R {assetDetails.riskReward}
-                  </span>
-                </div>
-                <p className="text-xs text-[#A9BEB5] mt-1 leading-relaxed">
-                  {assetDetails.confluenceNote}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 font-mono text-center">
-                <div className="bg-[#101B20] p-2.5 rounded-xl border border-[#1A363E]">
-                  <span className="text-[10px] text-[#A9BEB5] block">Entry Level</span>
-                  <span className="text-xs font-bold text-[#E8F2EE]">{assetDetails.entry}</span>
-                </div>
-                <div className="bg-[#101B20] p-2.5 rounded-xl border border-[#1A363E]">
-                  <span className="text-[10px] text-[#E05252] block">Stop Loss</span>
-                  <span className="text-xs font-bold text-[#E8F2EE]">{assetDetails.stopLoss}</span>
-                </div>
-                <div className="bg-[#101B20] p-2.5 rounded-xl border border-[#1A363E]">
-                  <span className="text-[10px] text-[#16A36A] block">Take Profit</span>
-                  <span className="text-xs font-bold text-[#E8F2EE]">{assetDetails.takeProfit}</span>
-                </div>
-              </div>
-
-              <div className="space-y-3 pt-2">
-                <div className="text-xs font-mono text-[#A9BEB5] flex items-center justify-between">
-                  <span>Semi-Automated Workflow:</span>
-                  <span className="font-bold text-[#E8F2EE]">Step 3: Trader Review</span>
-                </div>
-
-                {approvalStatus === 'PENDING' && (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setApprovalStatus('APPROVED')}
-                      className="flex-1 py-2.5 rounded-xl bg-[#16A36A] hover:bg-[#148f5d] text-[#E8F2EE] text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-[#16A36A]/20 transition-all"
-                    >
-                      <Check className="w-4 h-4" />
-                      <span>Approve Setup</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setApprovalStatus('REJECTED')}
-                      className="flex-1 py-2.5 rounded-xl bg-[#101B20] hover:bg-[#1A363E] text-[#E05252] border border-[#E05252]/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      <span>Reject Setup</span>
-                    </button>
-                  </div>
-                )}
-
-                {approvalStatus === 'APPROVED' && (
-                  <div className="space-y-2.5">
-                    <div className="p-3 rounded-xl bg-[#16A36A]/15 border border-[#16A36A]/40 text-xs text-[#E8F2EE] space-y-1">
-                      <p className="font-bold text-[#16A36A] flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Trader Approval Granted (Simulation)
-                      </p>
-                      <p className="text-[11px] text-[#A9BEB5]">
-                        Setup is queued for planned MT5 execution validation. Live MT5 bridge is not connected.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setApprovalStatus('MT5_VALIDATED')}
-                      className="w-full py-2.5 rounded-xl bg-[#168BFF] hover:bg-[#147bdc] text-[#E8F2EE] text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-[#168BFF]/25 transition-all"
-                    >
-                      <Workflow className="w-4 h-4" />
-                      <span>Simulate MT5 Independent Validation</span>
-                    </button>
-                  </div>
-                )}
-
-                {approvalStatus === 'MT5_VALIDATED' && (
-                  <div className="p-3.5 rounded-xl bg-[#168BFF]/15 border border-[#168BFF]/40 text-xs space-y-2">
-                    <div className="flex items-center justify-between text-[#168BFF] font-bold">
-                      <span className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4" />
-                        MT5 Client Validated (Simulation)
+          <div>
+            <p className="text-xs font-semibold text-[#E8F2EE]">Import OHLC CSV files</p>
+            <p className="mt-1 text-[10px] text-[#A9BEB5]">Columns: timestamp/date, open, high, low, close; optional volume. Use oldest-to-newest rows. Unix seconds, milliseconds, or ISO dates are accepted.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {TIMEFRAMES.map((timeframe) => {
+                const imported = imports[timeframe];
+                return (
+                  <label key={timeframe} className="flex min-h-[88px] cursor-pointer items-center gap-3 rounded-xl border border-[#1A363E] bg-[#101B20] p-3 hover:border-[#168BFF]/50">
+                    <FileUp className="size-4 shrink-0 text-[#168BFF]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-mono text-xs font-bold text-[#E8F2EE]">{timeframe}</span>
+                      <span className="block text-[9px] text-[#A9BEB5]">{TIMEFRAME_DESCRIPTIONS[timeframe]}</span>
+                      <span className={`mt-1 block truncate text-[10px] ${imported ? "text-[#16A36A]" : "text-[#A9BEB5]"}`}>
+                        {imported ? `${imported.candles.length} candles · ${imported.fileName}` : "Choose CSV file"}
                       </span>
-                      <span className="text-[10px] font-mono">Spread: 1.2 pips OK</span>
-                    </div>
-                    <p className="text-[11px] text-[#A9BEB5]">
-                      Simulated check passed. Actual MT5 order transmission is under development and not active.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setApprovalStatus('PENDING')}
-                      className="text-[11px] font-bold text-[#E8F2EE] underline hover:text-[#168BFF]"
-                    >
-                      Reset Simulation
-                    </button>
-                  </div>
-                )}
-
-                {approvalStatus === 'REJECTED' && (
-                  <div className="p-3 rounded-xl bg-[#E05252]/15 border border-[#E05252]/40 text-xs text-[#E8F2EE] space-y-2">
-                    <p className="font-bold text-[#E05252] flex items-center gap-1.5">
-                      <XCircle className="w-4 h-4" /> Setup Declined by Trader
-                    </p>
-                    <p className="text-[11px] text-[#A9BEB5]">
-                      Execution canceled. No instruction transmitted.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setApprovalStatus('PENDING')}
-                      className="text-[11px] font-bold text-[#E8F2EE] underline hover:text-[#168BFF]"
-                    >
-                      Reset Simulation
-                    </button>
-                  </div>
-                )}
-              </div>
+                      {imported?.warnings.map((warning) => <span key={warning} className="mt-1 block text-[9px] text-[#E69A36]">{warning}</span>)}
+                    </span>
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      aria-label={`Import ${timeframe} candles CSV`}
+                      data-testid={`input-market-csv-${timeframe}`}
+                      onChange={(event) => void handleFile(timeframe, event.target.files?.[0])}
+                      className="sr-only"
+                    />
+                  </label>
+                );
+              })}
             </div>
-          ) : (
-            <div className="bg-[#152B30] border border-[#E69A36]/40 rounded-2xl p-5 purple-glow-box space-y-4">
-              <div className="flex items-center justify-between border-b border-[#1A363E] pb-3">
-                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[#E69A36]/20 text-[#E69A36] border border-[#E69A36]/40 uppercase flex items-center gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5" /> NO TRADE SIGNAL
-                </span>
-                <span className="text-xs font-mono text-[#E69A36]">Protection Active</span>
-              </div>
-
-              <div>
-                <h3 className="text-base font-bold text-[#E8F2EE]">Capital Preservation Filter</h3>
-                <p className="text-xs text-[#A9BEB5] mt-1 leading-relaxed">
-                  Market conditions fail confluence requirements. The engine blocks trade proposals when noise is elevated.
-                </p>
-              </div>
-
-              <div className="bg-[#101B20] p-3 rounded-xl border border-[#1A363E] space-y-2 text-xs font-mono">
-                <div className="flex justify-between">
-                  <span className="text-[#A9BEB5]">Choppiness Index</span>
-                  <span className="text-[#E69A36] font-bold">64.2 / 100 (High Noise)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#A9BEB5]">Orderflow Alignment</span>
-                  <span className="text-[#E05252] font-bold">Conflicted (M15 vs H4)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#A9BEB5]">Economic Proximity</span>
-                  <span className="text-[#E8F2EE]">FOMC within 2 hours</span>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
+
+        {importError && <p role="alert" data-testid="error-market-csv" className="mt-3 rounded-lg border border-[#E05252]/30 bg-[#E05252]/10 p-3 text-xs text-[#FF9696]">{importError}</p>}
+        {analyze.isError && <p role="alert" className="mt-3 rounded-lg border border-[#E05252]/30 bg-[#E05252]/10 p-3 text-xs text-[#FF9696]">{analyze.error instanceof Error ? analyze.error.message : "Analysis request failed. Please try again."}</p>}
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={submitAnalysis}
+            disabled={!symbol.trim() || analyze.isPending}
+            data-testid="button-analyze-market"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#16A36A] px-4 text-xs font-bold text-[#E8F2EE] transition-colors hover:bg-[#148f5d] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {analyze.isPending && <LoaderCircle className="size-4 animate-spin" />}
+            {analyze.isPending ? "Analyzing candles…" : "Analyze supplied data"}
+          </button>
+          <span className="text-[10px] text-[#A9BEB5]">
+            {complete ? "All four timeframes are loaded." : "Missing or short timeframes return NO TRADE; analysis remains explicit."}
+          </span>
+        </div>
+      </section>
+
+      {analysis && <AnalysisResults analysis={analysis} />}
     </div>
   );
 };

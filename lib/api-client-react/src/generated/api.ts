@@ -33,6 +33,9 @@ import type {
   MembershipUpdateInput,
   MembershipUpdateResponse,
   TerminateSessionsResponse,
+  TradingAnalysisErrorResponse,
+  TradingAnalysisInput,
+  TradingAnalysisResponse,
   WorkspaceAccessResponse
 } from './api.schemas.ts';
 
@@ -266,6 +269,95 @@ export function useGetWorkspaceAccess<TData = Awaited<ReturnType<typeof getWorks
 
 
 
+
+export const getAnalyzeTradingUrl = () => {
+
+
+
+
+  return `/api/workspace/trading/analyze`
+}
+
+/**
+ * Performs deterministic multi-timeframe technical analysis on supplied historical candles. It does not fetch live market data or execute orders.
+ * @summary Analyze user-supplied candles for trading structure
+ */
+export const analyzeTrading = async (tradingAnalysisInput: TradingAnalysisInput, options?: Parameters<typeof customFetch>[1]): Promise<TradingAnalysisResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TradingAnalysisResponse>(getAnalyzeTradingUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tradingAnalysisInput)
+  }
+);}
+
+
+
+
+
+export const getAnalyzeTradingMutationKey = () => ['analyzeTrading'] as const;
+
+export const getAnalyzeTradingMutationOptions = <TError = ErrorType<TradingAnalysisErrorResponse | MembershipAccessErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeTrading>>, TError,AnalyzeTradingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeTrading>>, TError,AnalyzeTradingMutationVariables, TContext> => {
+
+const mutationKey = getAnalyzeTradingMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeTrading>>, AnalyzeTradingMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  analyzeTrading(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeTradingMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeTrading>>>
+    export type AnalyzeTradingMutationBody = BodyType<TradingAnalysisInput>
+    export type AnalyzeTradingMutationError = ErrorType<TradingAnalysisErrorResponse | MembershipAccessErrorResponse>
+    export type AnalyzeTradingMutationVariables = {data: BodyType<TradingAnalysisInput>}
+
+    /**
+ * @summary Analyze user-supplied candles for trading structure
+ */
+export const useAnalyzeTrading = <TError = ErrorType<TradingAnalysisErrorResponse | MembershipAccessErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeTrading>>, TError,AnalyzeTradingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeTrading>>,
+        TError,
+        AnalyzeTradingMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAnalyzeTradingMutationOptions(options), queryClient);
+    }
 
 export const getInitializeAdminUrl = () => {
 
