@@ -64,7 +64,8 @@ function parseProviderTimestamp(
       minute: 0,
       second: 0,
     };
-    return wallClockToTimestamp(parts, exchangeTimezone);
+    const timestamp = wallClockToTimestamp(parts, exchangeTimezone);
+    return timestamp != null && timestamp > 0 ? timestamp : null;
   }
 
   // The request explicitly sets timezone=UTC for intraday intervals. Twelve
@@ -74,7 +75,7 @@ function parseProviderTimestamp(
   );
   if (!match) return null;
   const [, year, month, day, hour, minute, second] = match;
-  return wallClockToTimestamp({
+  const timestamp = wallClockToTimestamp({
     year: Number(year),
     month: Number(month),
     day: Number(day),
@@ -82,6 +83,7 @@ function parseProviderTimestamp(
     minute: Number(minute),
     second: Number(second),
   }, "UTC");
+  return timestamp != null && timestamp > 0 ? timestamp : null;
 }
 
 function tickerKey(value: string): string {

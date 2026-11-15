@@ -38,7 +38,7 @@ function makeSeries(timeframe: TradingTimeframe, now = FIXED_NOW): ProviderCandl
         ? Math.floor(now / FRAME_MS["1D"]) * FRAME_MS["1D"]
         : now;
       return {
-        timestamp: timeframeOrigin - (60 - index + 1) * step,
+        timestamp: timeframeOrigin - (60 - index + (timeframe === "1D" ? 0 : 1)) * step,
         open: close - 0.5,
         high: close + 1,
         low: close - 1,
@@ -272,8 +272,11 @@ describe("Twelve Data adapter", () => {
 
   it.each([
     ["2026-02-30 07:00:00", "30M", "America/New_York"],
+    ["2026-03-08 25:00:00", "1H", "America/New_York"],
     ["2026-03-08T07:00:00Z", "1H", "America/New_York"],
+    ["2026-03-08", "4H", "America/New_York"],
     ["2026-02-30", "1D", "America/New_York"],
+    ["2026-03-08", "1D", "Not/A_Timezone"],
     ["2026-03-08", "1D", null],
   ] as const)("rejects undocumented or invalid provider timestamp %s for %s", async (datetime, timeframe, timezone) => {
     const provider = new TwelveDataProvider(
@@ -379,22 +382,35 @@ describe("provider-backed analysis service", () => {
   });
 
   it("marks stale provider candles stale after timezone normalization", async () => {
-    const baseProvider = makeProvider();
-    const provider: MarketDataProvider = {
-      ...baseProvider,
-      fetchCandles: vi.fn(async (instrument, timeframe) => {
-        const series = await baseProvider.fetchCandles(instrument, timeframe);
-        return timeframe === "30M"
-          ? {
-            ...series,
-            candles: series.candles.map((candle) => ({
+    const provider = new TwelveDataProvider(
+      "unit-test-placeholder",
+      vi.fn(async (input) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/quote")) return createResponse({
+          symbol: "XAU/USD",
+          close: "2059",
+          last_quote_at: (FIXED_NOW - 30_000) / 1_000,
+          is_market_open: true,
+        });
+        const timeframe = ({
+          "1day": "1D", "4h": "4H", "1h": "1H", "30min": "30M",
+        } as const)[url.searchParams.get("interval") as "1day" | "4h" | "1h" | "30min"];
+        const series = makeSeries(timeframe);
+        return createResponse({
+          meta: { symbol: "XAU/USD", exchange_timezone: "America/New_York" },
+          values: series.candles.map((candle) => {
+            const timestamp = candle.timestamp - (timeframe === "30M" ? 60 * 60_000 : 0);
+            const iso = new Date(timestamp).toISOString();
+            return {
               ...candle,
-              timestamp: candle.timestamp - 60 * 60_000,
-            })),
-          }
-          : series;
+              datetime: timeframe === "1D" ? iso.slice(0, 10) : iso.slice(0, 19).replace("T", " "),
+            };
+          }),
+        });
       }),
-    };
+      500,
+      "https://provider.invalid",
+    );
     const service = new MarketDataService({
       env: configuredEnvironment(),
       clock: () => FIXED_NOW,
@@ -404,6 +420,9 @@ describe("provider-backed analysis service", () => {
     const response = await service.analyze("XAUUSD", "member-a");
     expect(response.freshness).toBe("stale");
     expect(response.analysis.marketFreshness).toBe("stale");
+    expect(response.analysis.timeframes.find((item) => item.timeframe === "30M")?.dataStatus)
+      .toBe("stale");
+    expect(response.analysis.lastMarketTimestamp).toBe(FIXED_NOW - 30_000);
     expect(response.analysis.signal.decision).toBe("NO_TRADE");
   });
 

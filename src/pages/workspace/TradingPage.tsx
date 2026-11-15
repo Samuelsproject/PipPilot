@@ -92,6 +92,9 @@ export const TradingPage = () => {
       previousMemberId.current = memberId;
       invalidateAnalysis();
     }
+    return () => {
+      revision.current += 1;
+    };
   }, [memberId]);
 
   const handleFile = async (timeframe: TradingTimeframe, file?: File) => {
@@ -312,6 +315,7 @@ export const TradingPage = () => {
             disabled={
               !symbol.trim() ||
               pendingAnalysis === "provider" ||
+              isReading ||
               marketDataStatus.data?.connectionState === "configuration_required"
             }
             data-testid="button-analyze-provider"

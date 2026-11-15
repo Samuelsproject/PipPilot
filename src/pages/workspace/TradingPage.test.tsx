@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -146,7 +146,12 @@ describe("TradingPage", () => {
       },
       lastSuccessfulUpdateAt: 1_800_000_000_000,
       warnings: [],
-      analysis: { ...noTradeResult, requestedSymbol: symbol, dataSource: "provider_live" },
+      analysis: {
+        ...noTradeResult,
+        requestedSymbol: symbol,
+        canonicalSymbol: symbol,
+        dataSource: "provider_live",
+      },
     };
   }
 
@@ -154,14 +159,14 @@ describe("TradingPage", () => {
     const callbacks = providerMutateMock.mock.calls[index][1] as {
       onSuccess?: (value: unknown) => void;
     };
-    callbacks.onSuccess?.(providerResponse(symbol));
+    act(() => callbacks.onSuccess?.(providerResponse(symbol)));
   }
 
   function resolveCsvRequest(index: number) {
     const callbacks = mutateMock.mock.calls[index][1] as {
       onSuccess?: (value: typeof noTradeResult) => void;
     };
-    callbacks.onSuccess?.(noTradeResult);
+    act(() => callbacks.onSuccess?.(noTradeResult));
   }
 
   it("shows the actual provider readiness and does not show fictional market data", () => {
@@ -223,7 +228,7 @@ describe("TradingPage", () => {
     resolveProviderRequest(0, "XAUUSD");
 
     expect(screen.queryByText("Live provider data")).toBeNull();
-    expect(screen.queryByRole("heading", { name: "XAUUSDm" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "XAUUSD" })).toBeNull();
     expect(refetchStatusMock).not.toHaveBeenCalled();
   });
 
@@ -233,7 +238,7 @@ describe("TradingPage", () => {
     fireEvent.click(screen.getByTestId("button-analyze-provider"));
     await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
 
-    fireEvent.change(screen.getByTestId("input-trading-symbol"), {
+    fireEvent.change(screen.getByTestId("select-market-instrument"), {
       target: { value: "BTCUSD" },
     });
     fireEvent.click(screen.getByTestId("button-analyze-provider"));
@@ -244,7 +249,7 @@ describe("TradingPage", () => {
     resolveProviderRequest(0, "XAUUSD");
 
     expect(screen.getByRole("heading", { name: "BTCUSD" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "XAUUSDm" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "XAUUSD" })).toBeNull();
   });
 
   it("does not let a provider response replace a newer CSV analysis", async () => {
@@ -276,6 +281,51 @@ describe("TradingPage", () => {
 
     expect(screen.getByText("Live provider data")).toBeTruthy();
     expect(screen.queryByText("Imported candle analysis")).toBeNull();
+  });
+
+  it("ignores provider completion when a CSV upload changes the review state", async () => {
+    useConfiguredProviderStatus();
+    render(<TradingPage />);
+    fireEvent.click(screen.getByTestId("button-analyze-provider"));
+    await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
+
+    const csv = "timestamp,open,high,low,close\n1700000000,100,102,99,101";
+    const file = new File([csv], "new-candles.csv", { type: "text/csv" });
+    Object.defineProperty(file, "text", { value: async () => csv });
+    fireEvent.change(screen.getByTestId("input-market-csv-30M"), {
+      target: { files: [file] },
+    });
+    await screen.findByText(/new-candles.csv/);
+    resolveProviderRequest(0, "XAUUSD");
+
+    expect(screen.queryByText("Live provider data")).toBeNull();
+    expect(refetchStatusMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores an outdated provider error after switching to CSV analysis", async () => {
+    useConfiguredProviderStatus();
+    render(<TradingPage />);
+    fireEvent.click(screen.getByTestId("button-analyze-provider"));
+    await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId("button-analyze-market"));
+    await waitFor(() => expect(mutateMock).toHaveBeenCalledTimes(1));
+    resolveCsvRequest(0);
+    const callbacks = providerMutateMock.mock.calls[0][1] as {
+      onError?: (error: Error) => void;
+    };
+    act(() => callbacks.onError?.(new Error("provider request failed")));
+    expect(screen.getByText("Imported candle analysis")).toBeTruthy();
+    expect(screen.queryByTestId("error-market-provider")).toBeNull();
+  });
+
+  it("does not refresh readiness after an analysis request finishes on an unmounted page", async () => {
+    useConfiguredProviderStatus();
+    const { unmount } = render(<TradingPage />);
+    fireEvent.click(screen.getByTestId("button-analyze-provider"));
+    await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
+    unmount();
+    resolveProviderRequest(0, "XAUUSD");
+    expect(refetchStatusMock).not.toHaveBeenCalled();
   });
 
   it("keys provider readiness by member and ignores responses after an account switch", async () => {
