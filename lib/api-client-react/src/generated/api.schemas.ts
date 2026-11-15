@@ -92,3 +92,289 @@ export interface AdminErrorResponse {
   error: string;
 }
 
+export interface TradingCandle {
+  /**
+     * Candle open time as Unix milliseconds
+     * @minimum 1
+     */
+  timestamp: number;
+  /** @exclusiveMinimum 0 */
+  open: number;
+  /** @exclusiveMinimum 0 */
+  high: number;
+  /** @exclusiveMinimum 0 */
+  low: number;
+  /** @exclusiveMinimum 0 */
+  close: number;
+  /** @minimum 0 */
+  volume?: number;
+}
+
+export type TradingAnalysisInputTimeframes = {
+  /** @maxItems 200 */
+  '30M'?: TradingCandle[];
+  /** @maxItems 200 */
+  '1H'?: TradingCandle[];
+  /** @maxItems 200 */
+  '4H'?: TradingCandle[];
+  /** @maxItems 200 */
+  '1D'?: TradingCandle[];
+};
+
+export interface TradingAnalysisInput {
+  /**
+     * Broker-specific symbol, for example XAUUSDm, BTCUSD.a, or US30.cash
+     * @minLength 1
+     * @maxLength 64
+     */
+  symbol: string;
+  timeframes: TradingAnalysisInputTimeframes;
+}
+
+export type TradingBias = typeof TradingBias[keyof typeof TradingBias];
+
+
+export const TradingBias = {
+  bullish: 'bullish',
+  bearish: 'bearish',
+  neutral: 'neutral',
+  unavailable: 'unavailable',
+} as const;
+
+export type TradingDirection = typeof TradingDirection[keyof typeof TradingDirection];
+
+
+export const TradingDirection = {
+  bullish: 'bullish',
+  bearish: 'bearish',
+  neutral: 'neutral',
+} as const;
+
+export type TradingTimeframe = typeof TradingTimeframe[keyof typeof TradingTimeframe];
+
+
+export const TradingTimeframe = {
+  '30M': '30M',
+  '1H': '1H',
+  '4H': '4H',
+  '1D': '1D',
+} as const;
+
+export type TradingConceptKind = typeof TradingConceptKind[keyof typeof TradingConceptKind];
+
+
+export const TradingConceptKind = {
+  BOS: 'BOS',
+  CHOCH: 'CHOCH',
+  HH_HL: 'HH_HL',
+  LH_LL: 'LH_LL',
+  LIQUIDITY_SWEEP: 'LIQUIDITY_SWEEP',
+  EQUAL_HIGHS: 'EQUAL_HIGHS',
+  EQUAL_LOWS: 'EQUAL_LOWS',
+  INDUCEMENT: 'INDUCEMENT',
+  ORDER_BLOCK: 'ORDER_BLOCK',
+  FAIR_VALUE_GAP: 'FAIR_VALUE_GAP',
+  SUPPLY_DEMAND: 'SUPPLY_DEMAND',
+  SUPPORT_RESISTANCE: 'SUPPORT_RESISTANCE',
+  PREMIUM_DISCOUNT: 'PREMIUM_DISCOUNT',
+  DISPLACEMENT: 'DISPLACEMENT',
+  CRT_INTRADAY: 'CRT_INTRADAY',
+  CRT_SWING: 'CRT_SWING',
+} as const;
+
+export interface TradingConcept {
+  kind: TradingConceptKind;
+  direction: TradingDirection;
+  /** @nullable */
+  low?: number | null;
+  /** @nullable */
+  high?: number | null;
+  evidence: string;
+}
+
+export interface TradingIndicators {
+  atr14: number;
+  ema20: number;
+  ema50: number;
+  rsi14: number;
+}
+
+export type TradingTimeframeAnalysisDataStatus = typeof TradingTimeframeAnalysisDataStatus[keyof typeof TradingTimeframeAnalysisDataStatus];
+
+
+export const TradingTimeframeAnalysisDataStatus = {
+  available: 'available',
+  missing: 'missing',
+  insufficient: 'insufficient',
+  stale: 'stale',
+} as const;
+
+export interface TradingTimeframeAnalysis {
+  timeframe: TradingTimeframe;
+  dataStatus: TradingTimeframeAnalysisDataStatus;
+  bias: TradingBias;
+  structure: string;
+  concepts: TradingConcept[];
+  indicators: TradingIndicators | null;
+}
+
+export type TradingTargetLabel = typeof TradingTargetLabel[keyof typeof TradingTargetLabel];
+
+
+export const TradingTargetLabel = {
+  TP1: 'TP1',
+  TP2: 'TP2',
+  TP3: 'TP3',
+} as const;
+
+export interface TradingTarget {
+  label: TradingTargetLabel;
+  price: number;
+  riskReward: number;
+}
+
+export type TradingSignalDecision = typeof TradingSignalDecision[keyof typeof TradingSignalDecision];
+
+
+export const TradingSignalDecision = {
+  BUY: 'BUY',
+  SELL: 'SELL',
+  NO_TRADE: 'NO_TRADE',
+} as const;
+
+export type TradingSignalStatus = typeof TradingSignalStatus[keyof typeof TradingSignalStatus];
+
+
+export const TradingSignalStatus = {
+  valid: 'valid',
+  stale: 'stale',
+  expired: 'expired',
+  unavailable: 'unavailable',
+} as const;
+
+export interface TradingSignal {
+  decision: TradingSignalDecision;
+  status: TradingSignalStatus;
+  setupTimeframe: TradingTimeframe;
+  /** @nullable */
+  entryPrice: number | null;
+  /** @nullable */
+  entryLow: number | null;
+  /** @nullable */
+  entryHigh: number | null;
+  /** @nullable */
+  stopLoss: number | null;
+  /** @maxItems 3 */
+  targets: TradingTarget[];
+  /**
+     * Confluence score, not probability of profit
+     * @minimum 0
+     * @maximum 100
+     */
+  confidence: number;
+  confidenceExplanation: string;
+  evidence: string[];
+  invalidationConditions: string[];
+  /** @nullable */
+  expiresAt: number | null;
+}
+
+export type TradingMacroContextStatus = typeof TradingMacroContextStatus[keyof typeof TradingMacroContextStatus];
+
+
+export const TradingMacroContextStatus = {
+  unavailable: 'unavailable',
+} as const;
+
+export type TradingMacroContextSupportedEventsItem = typeof TradingMacroContextSupportedEventsItem[keyof typeof TradingMacroContextSupportedEventsItem];
+
+
+export const TradingMacroContextSupportedEventsItem = {
+  CPI: 'CPI',
+  PPI: 'PPI',
+  NFP: 'NFP',
+  FOMC: 'FOMC',
+} as const;
+
+export type TradingMacroContextExcludedEvent = typeof TradingMacroContextExcludedEvent[keyof typeof TradingMacroContextExcludedEvent];
+
+
+export const TradingMacroContextExcludedEvent = {
+  PCE: 'PCE',
+} as const;
+
+export interface TradingMacroContext {
+  status: TradingMacroContextStatus;
+  supportedEvents: TradingMacroContextSupportedEventsItem[];
+  excludedEvent: TradingMacroContextExcludedEvent;
+  /** @nullable */
+  hypothesisPercent: number | null;
+  explanation: string;
+}
+
+export type TradingAnalysisResponseInstrumentClass = typeof TradingAnalysisResponseInstrumentClass[keyof typeof TradingAnalysisResponseInstrumentClass];
+
+
+export const TradingAnalysisResponseInstrumentClass = {
+  gold: 'gold',
+  bitcoin: 'bitcoin',
+  forex: 'forex',
+  index: 'index',
+  unsupported: 'unsupported',
+} as const;
+
+export type TradingAnalysisResponseMarketSchedule = typeof TradingAnalysisResponseMarketSchedule[keyof typeof TradingAnalysisResponseMarketSchedule];
+
+
+export const TradingAnalysisResponseMarketSchedule = {
+  continuous_24_7: 'continuous_24_7',
+  broker_defined: 'broker_defined',
+  fx_weekdays: 'fx_weekdays',
+  unavailable: 'unavailable',
+} as const;
+
+export type TradingAnalysisResponseDataSource = typeof TradingAnalysisResponseDataSource[keyof typeof TradingAnalysisResponseDataSource];
+
+
+export const TradingAnalysisResponseDataSource = {
+  user_supplied_historical: 'user_supplied_historical',
+  unavailable: 'unavailable',
+} as const;
+
+export type TradingAnalysisResponseMarketFreshness = typeof TradingAnalysisResponseMarketFreshness[keyof typeof TradingAnalysisResponseMarketFreshness];
+
+
+export const TradingAnalysisResponseMarketFreshness = {
+  fresh: 'fresh',
+  stale: 'stale',
+  unavailable: 'unavailable',
+} as const;
+
+export interface TradingAnalysisResponse {
+  requestedSymbol: string;
+  /** @nullable */
+  canonicalSymbol: string | null;
+  instrumentClass: TradingAnalysisResponseInstrumentClass;
+  marketSchedule: TradingAnalysisResponseMarketSchedule;
+  dataSource: TradingAnalysisResponseDataSource;
+  analysisTimestamp: number;
+  /** @nullable */
+  lastMarketTimestamp: number | null;
+  marketFreshness: TradingAnalysisResponseMarketFreshness;
+  /** @nullable */
+  currentPrice: number | null;
+  higherTimeframeBias: TradingBias;
+  conflicts: string[];
+  /**
+     * @minItems 4
+     * @maxItems 4
+     */
+  timeframes: TradingTimeframeAnalysis[];
+  signal: TradingSignal;
+  macroContext: TradingMacroContext;
+}
+
+export interface TradingAnalysisErrorResponse {
+  error: string;
+}
+

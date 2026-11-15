@@ -61,6 +61,7 @@ function createHarness() {
     },
   } as unknown as SupabaseClient;
   const app = express();
+  app.use(express.json());
   app.use("/api", createWorkspaceRouter(() => client));
   return { app, client, usersByToken };
 }
@@ -124,6 +125,31 @@ describe("server-enforced workspace membership", () => {
     }
   });
 
+  it.each([
+    ["pending-token", "MEMBERSHIP_PENDING"],
+    ["suspended-token", "MEMBERSHIP_SUSPENDED"],
+    ["revoked-token", "MEMBERSHIP_REVOKED"],
+  ])("blocks the trading analysis POST for %s before analysis runs", async (token, expectedCode) => {
+    const { app } = createHarness();
+    const response = await request(app)
+      .post("/api/workspace/trading/analyze")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ symbol: "BTCUSD", timeframes: {} })
+      .expect(403);
+    expect(response.body.code).toBe(expectedCode);
+  });
+
+  it("permits an approved administrator while returning NO TRADE without candle data", async () => {
+    const { app } = createHarness();
+    const response = await request(app)
+      .post("/api/workspace/trading/analyze")
+      .set("Authorization", "Bearer admin-token")
+      .send({ symbol: "BTCUSD", timeframes: {} })
+      .expect(200);
+    expect(response.body.signal.decision).toBe("NO_TRADE");
+    expect(response.body.dataSource).toBe("unavailable");
+  });
+
   it("requires email verification before membership approval", async () => {
     const { app } = createHarness();
     const response = await request(app)
@@ -178,6 +204,7 @@ describe("server-enforced workspace membership", () => {
 
   it("fails closed when server-side membership verification is not configured", async () => {
     const app = express();
+    app.use(express.json());
     app.use(
       "/api",
       createWorkspaceRouter(() => {
