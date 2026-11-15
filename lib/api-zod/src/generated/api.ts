@@ -140,7 +140,7 @@ export const AnalyzeTradingResponse = zod.object({
   "canonicalSymbol": zod.string().nullable(),
   "instrumentClass": zod.enum(['gold', 'bitcoin', 'forex', 'index', 'unsupported']),
   "marketSchedule": zod.enum(['continuous_24_7', 'broker_defined', 'fx_weekdays', 'unavailable']),
-  "dataSource": zod.enum(['user_supplied_historical', 'unavailable']),
+  "dataSource": zod.enum(['user_supplied_historical', 'provider_live', 'provider_delayed', 'unavailable']),
   "analysisTimestamp": zod.number().int(),
   "lastMarketTimestamp": zod.number().int().nullable(),
   "marketFreshness": zod.enum(['fresh', 'stale', 'unavailable']),
@@ -191,6 +191,123 @@ export const AnalyzeTradingResponse = zod.object({
   "excludedEvent": zod.enum(['PCE']),
   "hypothesisPercent": zod.number().int().nullable(),
   "explanation": zod.string()
+})
+})
+
+
+/**
+ * Reports provider configuration and recent connection state without exposing credentials.
+ * @summary Check server-side market-data provider readiness
+ */
+export const GetMarketDataStatusResponse = zod.object({
+  "providerId": zod.enum(['none', 'twelvedata']),
+  "providerName": zod.string(),
+  "connectionState": zod.enum(['connected', 'delayed', 'disconnected', 'configuration_required']),
+  "dataMode": zod.enum(['live', 'delayed', 'unavailable']),
+  "lastSuccessfulUpdateAt": zod.number().int().nullable(),
+  "supportedInstrumentClasses": zod.array(zod.enum(['gold', 'bitcoin', 'forex', 'index'])),
+  "message": zod.string()
+})
+
+
+/**
+ * Retrieves quotes and 30M, 1H, 4H, and daily candles server-side, validates them, and feeds them to the existing analysis engine.
+ * @summary Fetch permitted market data and run trading analysis
+ */
+export const analyzeMarketDataBodySymbolMax = 64;
+
+
+
+export const AnalyzeMarketDataBody = zod.object({
+  "symbol": zod.string().min(1).max(analyzeMarketDataBodySymbolMax).describe('Broker or provider symbol; broker-specific names require an explicit safe mapping')
+})
+
+export const analyzeMarketDataResponseQuoteOnePriceExclusiveMin = 0;
+
+
+export const analyzeMarketDataResponseAnalysisTimeframesMin = 4;
+export const analyzeMarketDataResponseAnalysisTimeframesMax = 4;
+
+export const analyzeMarketDataResponseAnalysisSignalTargetsMax = 3;
+
+export const analyzeMarketDataResponseAnalysisSignalConfidenceMin = 0;
+export const analyzeMarketDataResponseAnalysisSignalConfidenceMax = 100;
+
+
+
+export const AnalyzeMarketDataResponse = zod.object({
+  "providerId": zod.enum(['twelvedata']),
+  "providerName": zod.string(),
+  "providerSymbol": zod.string().nullable(),
+  "providerExchange": zod.string().nullable(),
+  "dataMode": zod.enum(['live', 'delayed', 'unavailable']),
+  "freshness": zod.enum(['fresh', 'stale', 'unavailable']),
+  "quote": zod.union([zod.object({
+  "symbol": zod.string(),
+  "exchange": zod.string().nullable(),
+  "price": zod.number().gt(analyzeMarketDataResponseQuoteOnePriceExclusiveMin),
+  "timestamp": zod.number().int().min(1).describe('Provider quote timestamp as Unix milliseconds'),
+  "marketOpen": zod.boolean().nullable()
+}),zod.null()]),
+  "lastSuccessfulUpdateAt": zod.number().int().nullable(),
+  "warnings": zod.array(zod.string()),
+  "analysis": zod.object({
+  "requestedSymbol": zod.string(),
+  "canonicalSymbol": zod.string().nullable(),
+  "instrumentClass": zod.enum(['gold', 'bitcoin', 'forex', 'index', 'unsupported']),
+  "marketSchedule": zod.enum(['continuous_24_7', 'broker_defined', 'fx_weekdays', 'unavailable']),
+  "dataSource": zod.enum(['user_supplied_historical', 'provider_live', 'provider_delayed', 'unavailable']),
+  "analysisTimestamp": zod.number().int(),
+  "lastMarketTimestamp": zod.number().int().nullable(),
+  "marketFreshness": zod.enum(['fresh', 'stale', 'unavailable']),
+  "currentPrice": zod.number().nullable(),
+  "higherTimeframeBias": zod.enum(['bullish', 'bearish', 'neutral', 'unavailable']),
+  "conflicts": zod.array(zod.string()),
+  "timeframes": zod.array(zod.object({
+  "timeframe": zod.enum(['30M', '1H', '4H', '1D']),
+  "dataStatus": zod.enum(['available', 'missing', 'insufficient', 'stale']),
+  "bias": zod.enum(['bullish', 'bearish', 'neutral', 'unavailable']),
+  "structure": zod.string(),
+  "concepts": zod.array(zod.object({
+  "kind": zod.enum(['BOS', 'CHOCH', 'HH_HL', 'LH_LL', 'LIQUIDITY_SWEEP', 'EQUAL_HIGHS', 'EQUAL_LOWS', 'INDUCEMENT', 'ORDER_BLOCK', 'FAIR_VALUE_GAP', 'SUPPLY_DEMAND', 'SUPPORT_RESISTANCE', 'PREMIUM_DISCOUNT', 'DISPLACEMENT', 'CRT_INTRADAY', 'CRT_SWING']),
+  "direction": zod.enum(['bullish', 'bearish', 'neutral']),
+  "low": zod.number().nullish(),
+  "high": zod.number().nullish(),
+  "evidence": zod.string()
+})),
+  "indicators": zod.union([zod.object({
+  "atr14": zod.number(),
+  "ema20": zod.number(),
+  "ema50": zod.number(),
+  "rsi14": zod.number()
+}),zod.null()])
+})).min(analyzeMarketDataResponseAnalysisTimeframesMin).max(analyzeMarketDataResponseAnalysisTimeframesMax),
+  "signal": zod.object({
+  "decision": zod.enum(['BUY', 'SELL', 'NO_TRADE']),
+  "status": zod.enum(['valid', 'stale', 'expired', 'unavailable']),
+  "setupTimeframe": zod.enum(['30M', '1H', '4H', '1D']),
+  "entryPrice": zod.number().nullable(),
+  "entryLow": zod.number().nullable(),
+  "entryHigh": zod.number().nullable(),
+  "stopLoss": zod.number().nullable(),
+  "targets": zod.array(zod.object({
+  "label": zod.enum(['TP1', 'TP2', 'TP3']),
+  "price": zod.number(),
+  "riskReward": zod.number()
+})).max(analyzeMarketDataResponseAnalysisSignalTargetsMax),
+  "confidence": zod.number().int().min(analyzeMarketDataResponseAnalysisSignalConfidenceMin).max(analyzeMarketDataResponseAnalysisSignalConfidenceMax).describe('Confluence score, not probability of profit'),
+  "confidenceExplanation": zod.string(),
+  "evidence": zod.array(zod.string()),
+  "invalidationConditions": zod.array(zod.string()),
+  "expiresAt": zod.number().int().nullable()
+}),
+  "macroContext": zod.object({
+  "status": zod.enum(['unavailable']),
+  "supportedEvents": zod.array(zod.enum(['CPI', 'PPI', 'NFP', 'FOMC'])),
+  "excludedEvent": zod.enum(['PCE']),
+  "hypothesisPercent": zod.number().int().nullable(),
+  "explanation": zod.string()
+})
 })
 })
 

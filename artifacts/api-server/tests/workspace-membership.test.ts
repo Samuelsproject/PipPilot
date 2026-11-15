@@ -7,6 +7,7 @@ import {
   AdminSupabaseConfigError,
   DESIGNATED_ADMIN_EMAIL,
 } from "../src/lib/admin-supabase";
+import { MarketDataService } from "../src/lib/market-data/service";
 import { createWorkspaceRouter } from "../src/routes/workspace";
 
 const MEMBER_ID = "22222222-2222-4222-8222-222222222222";
@@ -62,7 +63,13 @@ function createHarness() {
   } as unknown as SupabaseClient;
   const app = express();
   app.use(express.json());
-  app.use("/api", createWorkspaceRouter(() => client));
+  app.use(
+    "/api",
+    createWorkspaceRouter(
+      () => client,
+      new MarketDataService({ env: {} }),
+    ),
+  );
   return { app, client, usersByToken };
 }
 
@@ -114,6 +121,7 @@ describe("server-enforced workspace membership", () => {
       "/api/workspace/signals",
       "/api/workspace/backtesting",
       "/api/workspace/records",
+      "/api/workspace/market-data/status",
     ];
 
     for (const path of protectedPaths) {
@@ -137,6 +145,39 @@ describe("server-enforced workspace membership", () => {
       .send({ symbol: "BTCUSD", timeframes: {} })
       .expect(403);
     expect(response.body.code).toBe(expectedCode);
+  });
+
+  it.each([
+    ["pending-token", "MEMBERSHIP_PENDING"],
+    ["suspended-token", "MEMBERSHIP_SUSPENDED"],
+    ["revoked-token", "MEMBERSHIP_REVOKED"],
+  ])("blocks provider-backed analysis for %s before provider access", async (token, expectedCode) => {
+    const { app } = createHarness();
+    const response = await request(app)
+      .post("/api/workspace/market-data/analyze")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ symbol: "BTCUSD" })
+      .expect(403);
+    expect(response.body.code).toBe(expectedCode);
+  });
+
+  it("reports provider readiness without exposing credentials and keeps CSV available", async () => {
+    const { app } = createHarness();
+    const status = await request(app)
+      .get("/api/workspace/market-data/status")
+      .set("Authorization", "Bearer active-token")
+      .expect(200);
+    expect(status.body.connectionState).toBe("configuration_required");
+    expect(status.body.dataMode).toBe("unavailable");
+    expect(status.body.message).toMatch(/CSV imports remain available/);
+
+    const analysis = await request(app)
+      .post("/api/workspace/market-data/analyze")
+      .set("Authorization", "Bearer active-token")
+      .send({ symbol: "BTCUSD" })
+      .expect(503);
+    expect(analysis.body.code).toBe("PROVIDER_NOT_CONFIGURED");
+    expect(JSON.stringify(analysis.body)).not.toMatch(/api.?key|secret/i);
   });
 
   it("permits an approved administrator while returning NO TRADE without candle data", async () => {

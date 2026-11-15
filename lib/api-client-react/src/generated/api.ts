@@ -29,6 +29,10 @@ import type {
   AdminMember,
   AdminUsersResponse,
   HealthStatus,
+  MarketDataAnalysisInput,
+  MarketDataAnalysisResponse,
+  MarketDataErrorResponse,
+  MarketDataProviderStatusResponse,
   MembershipAccessErrorResponse,
   MembershipUpdateInput,
   MembershipUpdateResponse,
@@ -357,6 +361,197 @@ export const useAnalyzeTrading = <TError = ErrorType<TradingAnalysisErrorRespons
         TContext
       > => {
       return useMutation(getAnalyzeTradingMutationOptions(options), queryClient);
+    }
+
+export const getGetMarketDataStatusUrl = () => {
+
+
+
+
+  return `/api/workspace/market-data/status`
+}
+
+/**
+ * Reports provider configuration and recent connection state without exposing credentials.
+ * @summary Check server-side market-data provider readiness
+ */
+export const getMarketDataStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<MarketDataProviderStatusResponse> => {
+
+  return customFetch<MarketDataProviderStatusResponse>(getGetMarketDataStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMarketDataStatusQueryKey = () => {
+    return [
+    `/api/workspace/market-data/status`
+    ] as const;
+    }
+
+
+export const getGetMarketDataStatusQueryOptions = <TData = Awaited<ReturnType<typeof getMarketDataStatus>>, TError = ErrorType<MembershipAccessErrorResponse>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMarketDataStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMarketDataStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMarketDataStatus>>> = ({ signal }) => getMarketDataStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMarketDataStatus>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetMarketDataStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getMarketDataStatus>>>
+export type GetMarketDataStatusQueryError = ErrorType<MembershipAccessErrorResponse>
+
+
+export function useGetMarketDataStatus<TData = Awaited<ReturnType<typeof getMarketDataStatus>>, TError = ErrorType<MembershipAccessErrorResponse>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMarketDataStatus>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMarketDataStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getMarketDataStatus>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMarketDataStatus<TData = Awaited<ReturnType<typeof getMarketDataStatus>>, TError = ErrorType<MembershipAccessErrorResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMarketDataStatus>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMarketDataStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getMarketDataStatus>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMarketDataStatus<TData = Awaited<ReturnType<typeof getMarketDataStatus>>, TError = ErrorType<MembershipAccessErrorResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMarketDataStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Check server-side market-data provider readiness
+ */
+
+export function useGetMarketDataStatus<TData = Awaited<ReturnType<typeof getMarketDataStatus>>, TError = ErrorType<MembershipAccessErrorResponse>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMarketDataStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetMarketDataStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAnalyzeMarketDataUrl = () => {
+
+
+
+
+  return `/api/workspace/market-data/analyze`
+}
+
+/**
+ * Retrieves quotes and 30M, 1H, 4H, and daily candles server-side, validates them, and feeds them to the existing analysis engine.
+ * @summary Fetch permitted market data and run trading analysis
+ */
+export const analyzeMarketData = async (marketDataAnalysisInput: MarketDataAnalysisInput, options?: Parameters<typeof customFetch>[1]): Promise<MarketDataAnalysisResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<MarketDataAnalysisResponse>(getAnalyzeMarketDataUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(marketDataAnalysisInput)
+  }
+);}
+
+
+
+
+
+export const getAnalyzeMarketDataMutationKey = () => ['analyzeMarketData'] as const;
+
+export const getAnalyzeMarketDataMutationOptions = <TError = ErrorType<MarketDataErrorResponse | MembershipAccessErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeMarketData>>, TError,AnalyzeMarketDataMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeMarketData>>, TError,AnalyzeMarketDataMutationVariables, TContext> => {
+
+const mutationKey = getAnalyzeMarketDataMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeMarketData>>, AnalyzeMarketDataMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  analyzeMarketData(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeMarketDataMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeMarketData>>>
+    export type AnalyzeMarketDataMutationBody = BodyType<MarketDataAnalysisInput>
+    export type AnalyzeMarketDataMutationError = ErrorType<MarketDataErrorResponse | MembershipAccessErrorResponse>
+    export type AnalyzeMarketDataMutationVariables = {data: BodyType<MarketDataAnalysisInput>}
+
+    /**
+ * @summary Fetch permitted market data and run trading analysis
+ */
+export const useAnalyzeMarketData = <TError = ErrorType<MarketDataErrorResponse | MembershipAccessErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeMarketData>>, TError,AnalyzeMarketDataMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeMarketData>>,
+        TError,
+        AnalyzeMarketDataMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAnalyzeMarketDataMutationOptions(options), queryClient);
     }
 
 export const getInitializeAdminUrl = () => {

@@ -8,6 +8,21 @@ vi.mock('../context/AuthContext', () => ({ useAuth: useAuthMock }));
 vi.mock('@workspace/api-client-react', async (importOriginal) => ({
   ...await importOriginal<typeof import('@workspace/api-client-react')>(),
   useAnalyzeTrading: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+  useAnalyzeMarketData: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+  useGetMarketDataStatus: () => ({
+    data: {
+      providerId: 'none',
+      providerName: 'No provider selected',
+      connectionState: 'configuration_required',
+      dataMode: 'unavailable',
+      lastSuccessfulUpdateAt: null,
+      supportedInstrumentClasses: ['gold', 'bitcoin', 'forex', 'index'],
+      message: 'Provider configuration is required. CSV imports remain available.',
+    },
+    refetch: vi.fn(),
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 describe('workspace authentication gate', () => {

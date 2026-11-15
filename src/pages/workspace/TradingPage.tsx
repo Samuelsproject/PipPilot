@@ -1,6 +1,11 @@
 import { useRef, useState } from "react";
-import { useAnalyzeTrading } from "@workspace/api-client-react";
+import {
+  useAnalyzeMarketData,
+  useAnalyzeTrading,
+  useGetMarketDataStatus,
+} from "@workspace/api-client-react";
 import type {
+  MarketDataAnalysisResponse,
   TradingAnalysisInputTimeframes,
   TradingAnalysisResponse,
   TradingTimeframe,
@@ -13,6 +18,17 @@ import { parseMarketCandlesCsv } from "../../lib/market-data-csv";
 const MIN_CANDLES = 50;
 const MAX_CANDLES = 200;
 const TIMEFRAMES: TradingTimeframe[] = ["1D", "4H", "1H", "30M"];
+const INSTRUMENT_PRESETS = [
+  "XAUUSD", "BTCUSD", "BTCUSDT", "EURUSD", "GBPUSD", "USDJPY",
+  "US30", "US100", "US500", "GER40", "UK100", "JP225",
+];
+
+const CONNECTION_LABELS = {
+  connected: "Connected",
+  delayed: "Delayed",
+  disconnected: "Disconnected",
+  configuration_required: "Configuration required",
+} as const;
 
 interface ImportedTimeframe {
   fileName: string;
@@ -26,11 +42,26 @@ export const TradingPage = () => {
   const [imports, setImports] = useState<Partial<Record<TradingTimeframe, ImportedTimeframe>>>({});
   const [importError, setImportError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<TradingAnalysisResponse | null>(null);
+  const [providerAnalysis, setProviderAnalysis] = useState<MarketDataAnalysisResponse | null>(null);
   const revision = useRef(0);
   const fileRevisions = useRef<Partial<Record<TradingTimeframe, number>>>({});
   const pendingReads = useRef(0);
   const [isReading, setIsReading] = useState(false);
   const analyze = useAnalyzeTrading({
+    request: session?.access_token
+      ? { headers: { Authorization: `Bearer ${session.access_token}` } }
+      : undefined,
+  });
+  const marketDataStatus = useGetMarketDataStatus({
+    query: {
+      enabled: Boolean(session?.access_token),
+      refetchInterval: 60_000,
+    },
+    request: session?.access_token
+      ? { headers: { Authorization: `Bearer ${session.access_token}` } }
+      : undefined,
+  });
+  const analyzeProviderData = useAnalyzeMarketData({
     request: session?.access_token
       ? { headers: { Authorization: `Bearer ${session.access_token}` } }
       : undefined,
@@ -42,6 +73,7 @@ export const TradingPage = () => {
     fileRevisions.current[timeframe] = fileRevision;
     setImportError(null);
     setAnalysis(null);
+    setProviderAnalysis(null);
     if (!file) {
       setImports((current) => {
         const next = { ...current };
@@ -82,11 +114,27 @@ export const TradingPage = () => {
       if (file) timeframes[timeframe] = file.candles;
     }
     setAnalysis(null);
+    setProviderAnalysis(null);
     analyze.mutate({ data: { symbol: symbol.trim(), timeframes } }, {
       onSuccess: (result) => {
         if (requestRevision === revision.current) setAnalysis(result);
       },
     });
+  };
+
+  const submitProviderAnalysis = () => {
+    if (!symbol.trim()) return;
+    setAnalysis(null);
+    setProviderAnalysis(null);
+    analyzeProviderData.mutate(
+      { data: { symbol: symbol.trim() } },
+      {
+        onSuccess: (result) => {
+          setProviderAnalysis(result);
+          void marketDataStatus.refetch();
+        },
+      },
+    );
   };
 
   const complete = TIMEFRAMES.every((timeframe) =>
@@ -102,19 +150,60 @@ export const TradingPage = () => {
             <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#168BFF]">Trading intelligence · structural analysis</p>
             <h1 className="mt-1 text-xl font-extrabold text-[#E8F2EE]">Multi-timeframe market review</h1>
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-[#A9BEB5]">
-              Import your broker’s candle exports for 30M, 1H, 4H, and 1D. Analysis uses only those supplied historical bars; no live or delayed market feed is connected.
+              Fetch validated 30M, 1H, 4H, and 1D candles from the server-configured provider, or keep using broker CSV imports. Provider credentials stay server-side.
             </p>
           </div>
-          <span className="rounded-full border border-[#E69A36]/30 bg-[#E69A36]/10 px-3 py-1.5 text-[10px] font-bold uppercase text-[#E69A36]">
-            No live data provider
+          <span
+            role="status"
+            data-testid="status-market-data"
+            className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase ${
+              marketDataStatus.data?.connectionState === "connected"
+                ? "border-[#16A36A]/30 bg-[#16A36A]/10 text-[#16A36A]"
+                : marketDataStatus.data?.connectionState === "delayed"
+                  ? "border-[#E69A36]/30 bg-[#E69A36]/10 text-[#E69A36]"
+                  : "border-[#E69A36]/30 bg-[#E69A36]/10 text-[#E69A36]"
+            }`}
+          >
+            {marketDataStatus.data
+              ? CONNECTION_LABELS[marketDataStatus.data.connectionState]
+              : "Disconnected"}
           </span>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[#A9BEB5]">
+          <span>Provider: {marketDataStatus.data?.providerName ?? "Status unavailable"}</span>
+          <span>Mode: {marketDataStatus.data?.dataMode ?? "unavailable"}</span>
+          <span>
+            Last successful update: {marketDataStatus.data?.lastSuccessfulUpdateAt
+              ? new Date(marketDataStatus.data.lastSuccessfulUpdateAt).toLocaleString()
+              : "None yet"}
+          </span>
+        </div>
+        <p className="mt-2 text-[10px] leading-relaxed text-[#A9BEB5]">
+          {marketDataStatus.data?.message ?? "Provider status is unavailable. CSV imports remain available."}
+        </p>
       </header>
 
       <section className="rounded-2xl border border-[#1A363E] bg-[#152B30] p-4 sm:p-5">
-        <div className="grid gap-4 lg:grid-cols-[minmax(180px,0.7fr)_2fr]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.8fr)_2fr]">
           <label className="block text-xs font-semibold text-[#E8F2EE]">
-            Broker symbol
+            Select instrument
+            <select
+              value={INSTRUMENT_PRESETS.includes(symbol.toUpperCase()) ? symbol.toUpperCase() : "CUSTOM"}
+              onChange={(event) => {
+                revision.current += 1;
+                setSymbol(event.target.value === "CUSTOM" ? "" : event.target.value);
+                setAnalysis(null);
+                setProviderAnalysis(null);
+              }}
+              data-testid="select-market-instrument"
+              className="mt-2 min-h-11 w-full rounded-xl border border-[#1A363E] bg-[#101B20] px-3 text-sm text-[#E8F2EE] outline-none focus:border-[#168BFF] focus-visible:ring-2 focus-visible:ring-[#168BFF]/40"
+            >
+              {INSTRUMENT_PRESETS.map((instrument) => (
+                <option key={instrument} value={instrument}>{instrument}</option>
+              ))}
+              <option value="CUSTOM">Custom broker symbol</option>
+            </select>
+            <span className="mt-3 block">Broker symbol or alias</span>
             <input
               type="text"
               value={symbol}
@@ -122,13 +211,14 @@ export const TradingPage = () => {
                 revision.current += 1;
                 setSymbol(event.target.value);
                 setAnalysis(null);
+                setProviderAnalysis(null);
               }}
               placeholder="e.g. XAUUSDm, BTCUSD.a, US30.cash"
               data-testid="input-trading-symbol"
               className="mt-2 min-h-11 w-full rounded-xl border border-[#1A363E] bg-[#101B20] px-3 font-mono text-sm text-[#E8F2EE] outline-none focus:border-[#168BFF] focus-visible:ring-2 focus-visible:ring-[#168BFF]/40"
             />
             <span className="mt-1 block text-[10px] font-normal text-[#A9BEB5]">
-              Gold, BTC pairs, FX pairs, US30, US100 and common broker aliases
+              Non-default BTC pairs and broker CFDs need an exact server-side provider symbol mapping.
             </span>
           </label>
 
@@ -167,8 +257,23 @@ export const TradingPage = () => {
 
         {importError && <p role="alert" data-testid="error-market-csv" className="mt-3 rounded-lg border border-[#E05252]/30 bg-[#E05252]/10 p-3 text-xs text-[#FF9696]">{importError}</p>}
         {analyze.isError && <p role="alert" className="mt-3 rounded-lg border border-[#E05252]/30 bg-[#E05252]/10 p-3 text-xs text-[#FF9696]">{analyze.error instanceof Error ? analyze.error.message : "Analysis request failed. Please try again."}</p>}
+        {analyzeProviderData.isError && <p role="alert" data-testid="error-market-provider" className="mt-3 rounded-lg border border-[#E05252]/30 bg-[#E05252]/10 p-3 text-xs text-[#FF9696]">Market data could not be retrieved. No live signal was generated; CSV import remains available.</p>}
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={submitProviderAnalysis}
+            disabled={
+              !symbol.trim() ||
+              analyzeProviderData.isPending ||
+              marketDataStatus.data?.connectionState === "configuration_required"
+            }
+            data-testid="button-analyze-provider"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#16A36A] px-4 text-xs font-bold text-[#E8F2EE] transition-colors hover:bg-[#148f5d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3DDC97] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {analyzeProviderData.isPending && <LoaderCircle className="size-4 animate-spin" />}
+            {analyzeProviderData.isPending ? "Fetching market data…" : "Fetch and analyze provider data"}
+          </button>
           <button
             type="button"
             onClick={submitAnalysis}
@@ -177,7 +282,7 @@ export const TradingPage = () => {
             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#16A36A] px-4 text-xs font-bold text-[#E8F2EE] transition-colors hover:bg-[#148f5d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3DDC97] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {analyze.isPending && <LoaderCircle className="size-4 animate-spin" />}
-            {analyze.isPending ? "Analyzing candles…" : "Analyze supplied data"}
+            {analyze.isPending ? "Analyzing candles…" : "Analyze CSV data"}
           </button>
           <span aria-live="polite" className="text-[10px] text-[#A9BEB5]">
             {complete ? "All four timeframes are loaded." : `Each timeframe needs at least ${MIN_CANDLES} closed candles. Missing or short timeframes return NO TRADE with data marked unavailable.`}
@@ -185,6 +290,12 @@ export const TradingPage = () => {
         </div>
       </section>
 
+      {providerAnalysis && (
+        <TradingAnalysisResults
+          analysis={providerAnalysis.analysis}
+          provenance={providerAnalysis}
+        />
+      )}
       {analysis && <TradingAnalysisResults analysis={analysis} />}
     </div>
   );

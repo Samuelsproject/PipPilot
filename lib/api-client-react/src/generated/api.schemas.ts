@@ -338,6 +338,8 @@ export type TradingAnalysisResponseDataSource = typeof TradingAnalysisResponseDa
 
 export const TradingAnalysisResponseDataSource = {
   user_supplied_historical: 'user_supplied_historical',
+  provider_live: 'provider_live',
+  provider_delayed: 'provider_delayed',
   unavailable: 'unavailable',
 } as const;
 
@@ -376,5 +378,138 @@ export interface TradingAnalysisResponse {
 
 export interface TradingAnalysisErrorResponse {
   error: string;
+}
+
+export interface MarketDataAnalysisInput {
+  /**
+     * Broker or provider symbol; broker-specific names require an explicit safe mapping
+     * @minLength 1
+     * @maxLength 64
+     */
+  symbol: string;
+}
+
+export type MarketDataProviderStatusResponseProviderId = typeof MarketDataProviderStatusResponseProviderId[keyof typeof MarketDataProviderStatusResponseProviderId];
+
+
+export const MarketDataProviderStatusResponseProviderId = {
+  none: 'none',
+  twelvedata: 'twelvedata',
+} as const;
+
+export type MarketDataProviderStatusResponseConnectionState = typeof MarketDataProviderStatusResponseConnectionState[keyof typeof MarketDataProviderStatusResponseConnectionState];
+
+
+export const MarketDataProviderStatusResponseConnectionState = {
+  connected: 'connected',
+  delayed: 'delayed',
+  disconnected: 'disconnected',
+  configuration_required: 'configuration_required',
+} as const;
+
+export type MarketDataProviderStatusResponseDataMode = typeof MarketDataProviderStatusResponseDataMode[keyof typeof MarketDataProviderStatusResponseDataMode];
+
+
+export const MarketDataProviderStatusResponseDataMode = {
+  live: 'live',
+  delayed: 'delayed',
+  unavailable: 'unavailable',
+} as const;
+
+export type MarketDataProviderStatusResponseSupportedInstrumentClassesItem = typeof MarketDataProviderStatusResponseSupportedInstrumentClassesItem[keyof typeof MarketDataProviderStatusResponseSupportedInstrumentClassesItem];
+
+
+export const MarketDataProviderStatusResponseSupportedInstrumentClassesItem = {
+  gold: 'gold',
+  bitcoin: 'bitcoin',
+  forex: 'forex',
+  index: 'index',
+} as const;
+
+export interface MarketDataProviderStatusResponse {
+  providerId: MarketDataProviderStatusResponseProviderId;
+  providerName: string;
+  connectionState: MarketDataProviderStatusResponseConnectionState;
+  dataMode: MarketDataProviderStatusResponseDataMode;
+  /** @nullable */
+  lastSuccessfulUpdateAt: number | null;
+  supportedInstrumentClasses: MarketDataProviderStatusResponseSupportedInstrumentClassesItem[];
+  message: string;
+}
+
+export interface MarketDataQuote {
+  symbol: string;
+  /** @nullable */
+  exchange: string | null;
+  /** @exclusiveMinimum 0 */
+  price: number;
+  /**
+     * Provider quote timestamp as Unix milliseconds
+     * @minimum 1
+     */
+  timestamp: number;
+  /** @nullable */
+  marketOpen: boolean | null;
+}
+
+export type MarketDataAnalysisResponseProviderId = typeof MarketDataAnalysisResponseProviderId[keyof typeof MarketDataAnalysisResponseProviderId];
+
+
+export const MarketDataAnalysisResponseProviderId = {
+  twelvedata: 'twelvedata',
+} as const;
+
+export type MarketDataAnalysisResponseDataMode = typeof MarketDataAnalysisResponseDataMode[keyof typeof MarketDataAnalysisResponseDataMode];
+
+
+export const MarketDataAnalysisResponseDataMode = {
+  live: 'live',
+  delayed: 'delayed',
+  unavailable: 'unavailable',
+} as const;
+
+export type MarketDataAnalysisResponseFreshness = typeof MarketDataAnalysisResponseFreshness[keyof typeof MarketDataAnalysisResponseFreshness];
+
+
+export const MarketDataAnalysisResponseFreshness = {
+  fresh: 'fresh',
+  stale: 'stale',
+  unavailable: 'unavailable',
+} as const;
+
+export interface MarketDataAnalysisResponse {
+  providerId: MarketDataAnalysisResponseProviderId;
+  providerName: string;
+  /** @nullable */
+  providerSymbol: string | null;
+  /** @nullable */
+  providerExchange: string | null;
+  dataMode: MarketDataAnalysisResponseDataMode;
+  freshness: MarketDataAnalysisResponseFreshness;
+  quote: MarketDataQuote | null;
+  /** @nullable */
+  lastSuccessfulUpdateAt: number | null;
+  warnings: string[];
+  analysis: TradingAnalysisResponse;
+}
+
+export type MarketDataErrorResponseCode = typeof MarketDataErrorResponseCode[keyof typeof MarketDataErrorResponseCode];
+
+
+export const MarketDataErrorResponseCode = {
+  PROVIDER_NOT_CONFIGURED: 'PROVIDER_NOT_CONFIGURED',
+  PROVIDER_UNAVAILABLE: 'PROVIDER_UNAVAILABLE',
+  PROVIDER_RATE_LIMITED: 'PROVIDER_RATE_LIMITED',
+  REQUEST_RATE_LIMITED: 'REQUEST_RATE_LIMITED',
+  SYMBOL_UNSUPPORTED: 'SYMBOL_UNSUPPORTED',
+  PROVIDER_DATA_INVALID: 'PROVIDER_DATA_INVALID',
+  PROVIDER_TIMEOUT: 'PROVIDER_TIMEOUT',
+} as const;
+
+export interface MarketDataErrorResponse {
+  code: MarketDataErrorResponseCode;
+  error: string;
+  /** @nullable */
+  retryAfterSeconds?: number | null;
 }
 

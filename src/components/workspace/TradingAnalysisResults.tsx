@@ -1,4 +1,8 @@
-import type { TradingAnalysisResponse, TradingTimeframe } from "@workspace/api-client-react";
+import type {
+  MarketDataAnalysisResponse,
+  TradingAnalysisResponse,
+  TradingTimeframe,
+} from "@workspace/api-client-react";
 import { useEffect, useState } from "react";
 import { AlertTriangle, ShieldCheck } from "lucide-react";
 
@@ -27,7 +31,18 @@ function biasColor(bias: string): string {
   return "text-[#A9BEB5]";
 }
 
-export function TradingAnalysisResults({ analysis }: { analysis: TradingAnalysisResponse }) {
+type MarketDataProvenance = Pick<
+  MarketDataAnalysisResponse,
+  "providerName" | "providerSymbol" | "providerExchange" | "dataMode" | "freshness" | "quote" | "lastSuccessfulUpdateAt"
+>;
+
+export function TradingAnalysisResults({
+  analysis,
+  provenance,
+}: {
+  analysis: TradingAnalysisResponse;
+  provenance?: MarketDataProvenance;
+}) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     setNow(Date.now());
@@ -35,17 +50,27 @@ export function TradingAnalysisResults({ analysis }: { analysis: TradingAnalysis
     return () => window.clearInterval(timer);
   }, [analysis]);
   const reviewExpired = analysis.signal.expiresAt != null && now > analysis.signal.expiresAt;
-  const dataIncomplete = analysis.dataSource !== "user_supplied_historical"
+  const dataIncomplete = analysis.dataSource === "unavailable"
+    || analysis.marketFreshness !== "fresh"
     || analysis.timeframes.some((tf) => tf.dataStatus !== "available");
-  const signal = (dataIncomplete || reviewExpired) && analysis.signal.decision !== "NO_TRADE"
+  const delayedProvider = provenance?.dataMode === "delayed"
+    || analysis.dataSource === "provider_delayed";
+  const mustSuppressSignal = dataIncomplete || reviewExpired || delayedProvider;
+  const signal = mustSuppressSignal && analysis.signal.decision !== "NO_TRADE"
     ? {
       ...analysis.signal,
       decision: "NO_TRADE" as const,
-      status: reviewExpired ? "expired" as const : "unavailable" as const,
+      status: reviewExpired
+        ? "expired" as const
+        : analysis.marketFreshness === "stale"
+          ? "stale" as const
+          : "unavailable" as const,
       confidence: 0,
       confidenceExplanation: reviewExpired
         ? "NO TRADE: the review window has expired. Import refreshed closed candles and run analysis again."
-        : "NO TRADE: source data is unavailable, insufficient, or stale.",
+        : delayedProvider
+          ? "NO TRADE: delayed data is for context only and cannot generate a current live-market signal."
+          : "NO TRADE: source data is unavailable, insufficient, or stale.",
       targets: [], entryPrice: null, entryLow: null, entryHigh: null, stopLoss: null,
     }
     : analysis.signal;
@@ -60,7 +85,11 @@ export function TradingAnalysisResults({ analysis }: { analysis: TradingAnalysis
       <section className="rounded-2xl border border-[#1A363E] bg-[#152B30] p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] font-mono uppercase tracking-wider text-[#168BFF]">Imported candle analysis</p>
+            <p className="text-[10px] font-mono uppercase tracking-wider text-[#168BFF]">
+              {provenance
+                ? `${provenance.providerName} · ${provenance.dataMode} market data`
+                : "Imported candle analysis"}
+            </p>
             <h2 className="mt-1 text-lg font-bold text-[#E8F2EE]">
               {analysis.requestedSymbol}
               {analysis.canonicalSymbol && analysis.canonicalSymbol !== analysis.requestedSymbol.toUpperCase()
@@ -69,16 +98,31 @@ export function TradingAnalysisResults({ analysis }: { analysis: TradingAnalysis
             </h2>
             <p className="mt-1 text-xs text-[#A9BEB5]">
               {analysis.instrumentClass} · {analysis.marketSchedule.replaceAll("_", " ")}
+              {provenance && (
+                <span className="block">
+                  Provider symbol {provenance.providerSymbol}
+                  {provenance.providerExchange ? ` · ${provenance.providerExchange}` : ""}
+                </span>
+              )}
             </p>
           </div>
           <div className="sm:text-right">
             <p className="text-xl font-mono font-bold text-[#168BFF]">{formatPrice(analysis.currentPrice)}</p>
-            <p className="text-[10px] text-[#A9BEB5]">latest imported close · {formatDate(analysis.lastMarketTimestamp)}</p>
+            <p className="text-[10px] text-[#A9BEB5]">
+              {provenance ? "verified provider quote" : "latest imported close"} ·{" "}
+              {formatDate(provenance?.quote?.timestamp ?? analysis.lastMarketTimestamp)}
+            </p>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
           <span className="rounded-full border border-[#168BFF]/30 bg-[#168BFF]/10 px-2.5 py-1 text-[#168BFF]">
-            {analysis.dataSource === "user_supplied_historical" ? "User-supplied historical data" : "Market data unavailable"}
+            {analysis.dataSource === "user_supplied_historical"
+              ? "User-supplied historical data"
+              : analysis.dataSource === "provider_live"
+                ? "Live provider data"
+                : analysis.dataSource === "provider_delayed"
+                  ? "Delayed provider data"
+                  : "Market data unavailable"}
           </span>
           <span className={`rounded-full border px-2.5 py-1 ${analysis.marketFreshness === "fresh"
             ? "border-[#16A36A]/30 bg-[#16A36A]/10 text-[#16A36A]"
@@ -88,6 +132,21 @@ export function TradingAnalysisResults({ analysis }: { analysis: TradingAnalysis
           <span className="rounded-full border border-[#1A363E] px-2.5 py-1 text-[#A9BEB5]">
             Analysis {formatDate(analysis.analysisTimestamp)}
           </span>
+          {provenance?.lastSuccessfulUpdateAt != null && (
+            <span className="rounded-full border border-[#1A363E] px-2.5 py-1 text-[#A9BEB5]">
+              Retrieved {formatDate(provenance.lastSuccessfulUpdateAt)}
+            </span>
+          )}
+          {provenance?.providerName === "Twelve Data" && (
+            <a
+              className="rounded-full border border-[#1A363E] px-2.5 py-1 text-[#A9BEB5] underline underline-offset-2"
+              href="https://twelvedata.com"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Data by Twelve Data
+            </a>
+          )}
         </div>
       </section>
 
@@ -151,7 +210,11 @@ export function TradingAnalysisResults({ analysis }: { analysis: TradingAnalysis
           </div>
           <span className="text-[10px] uppercase text-[#A9BEB5]">Signal state: {signal.status}</span>
         </div>
-        {dataIncomplete && <p className="mt-3 rounded-lg border border-[#E69A36]/30 bg-[#E69A36]/10 p-2 text-[10px] text-[#E8B75A]" data-testid="status-data-unavailable">One or more timeframes are missing, short, or stale. No setup is shown until every timeframe has enough supplied candles.</p>}
+        {(dataIncomplete || delayedProvider) && <p className="mt-3 rounded-lg border border-[#E69A36]/30 bg-[#E69A36]/10 p-2 text-[10px] text-[#E8B75A]" data-testid="status-data-unavailable">
+          {delayedProvider
+            ? "Delayed data is not used to generate a live-market signal."
+            : "One or more timeframes are missing, short, or stale. No setup is shown until every timeframe has enough current data."}
+        </p>}
         <p className="mt-3 text-xs text-[#A9BEB5]">Confluence score <span className="font-mono font-bold text-[#168BFF]">{signal.confidence}%</span> <span className="text-[10px]">(not a probability of profit)</span></p>
         <p className="mt-1 text-xs leading-relaxed text-[#A9BEB5]">{signal.confidenceExplanation}</p>
         {signal.decision !== "NO_TRADE" && (

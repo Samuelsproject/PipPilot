@@ -106,6 +106,98 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MembershipAccessErrorResponse"
+  /workspace/market-data/status:
+    get:
+      operationId: getMarketDataStatus
+      tags: [workspace]
+      summary: Check server-side market-data provider readiness
+      description: Reports provider configuration and recent connection state without exposing credentials.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Provider readiness and last successful update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketDataProviderStatusResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
+        "403":
+          description: Email verification or approved membership is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
+        "503":
+          description: Membership authorization is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
+  /workspace/market-data/analyze:
+    post:
+      operationId: analyzeMarketData
+      tags: [workspace]
+      summary: Fetch permitted market data and run trading analysis
+      description: Retrieves quotes and 30M, 1H, 4H, and daily candles server-side, validates them, and feeds them to the existing analysis engine.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarketDataAnalysisInput"
+      responses:
+        "200":
+          description: Provider-backed analysis and data provenance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketDataAnalysisResponse"
+        "400":
+          description: Unsupported symbol or invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketDataErrorResponse"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
+        "403":
+          description: Email verification or approved membership is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipAccessErrorResponse"
+        "429":
+          description: Request or provider quota limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketDataErrorResponse"
+        "503":
+          description: Provider is not configured or unavailable
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/MarketDataErrorResponse"
+                  - $ref: "#/components/schemas/MembershipAccessErrorResponse"
+        "504":
+          description: Provider request timed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketDataErrorResponse"
   /admin/initialize:
     post:
       operationId: initializeAdmin
@@ -637,7 +729,7 @@ components:
           enum: [continuous_24_7, broker_defined, fx_weekdays, unavailable]
         dataSource:
           type: string
-          enum: [user_supplied_historical, unavailable]
+          enum: [user_supplied_historical, provider_live, provider_delayed, unavailable]
         analysisTimestamp:
           type: integer
         lastMarketTimestamp:
@@ -669,4 +761,120 @@ components:
       properties:
         error:
           type: string
+    MarketDataAnalysisInput:
+      type: object
+      required: [symbol]
+      properties:
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Broker or provider symbol; broker-specific names require an explicit safe mapping
+    MarketDataProviderStatusResponse:
+      type: object
+      required:
+        - providerId
+        - providerName
+        - connectionState
+        - dataMode
+        - lastSuccessfulUpdateAt
+        - supportedInstrumentClasses
+        - message
+      properties:
+        providerId:
+          type: string
+          enum: [none, twelvedata]
+        providerName:
+          type: string
+        connectionState:
+          type: string
+          enum: [connected, delayed, disconnected, configuration_required]
+        dataMode:
+          type: string
+          enum: [live, delayed, unavailable]
+        lastSuccessfulUpdateAt:
+          type: ["integer", "null"]
+        supportedInstrumentClasses:
+          type: array
+          items:
+            type: string
+            enum: [gold, bitcoin, forex, index]
+        message:
+          type: string
+    MarketDataQuote:
+      type: object
+      required: [symbol, exchange, price, timestamp, marketOpen]
+      properties:
+        symbol:
+          type: string
+        exchange:
+          type: ["string", "null"]
+        price:
+          type: number
+          exclusiveMinimum: 0
+        timestamp:
+          type: integer
+          minimum: 1
+          description: Provider quote timestamp as Unix milliseconds
+        marketOpen:
+          type: ["boolean", "null"]
+    MarketDataAnalysisResponse:
+      type: object
+      required:
+        - providerId
+        - providerName
+        - providerSymbol
+        - providerExchange
+        - dataMode
+        - freshness
+        - quote
+        - lastSuccessfulUpdateAt
+        - warnings
+        - analysis
+      properties:
+        providerId:
+          type: string
+          enum: [twelvedata]
+        providerName:
+          type: string
+        providerSymbol:
+          type: ["string", "null"]
+        providerExchange:
+          type: ["string", "null"]
+        dataMode:
+          type: string
+          enum: [live, delayed, unavailable]
+        freshness:
+          type: string
+          enum: [fresh, stale, unavailable]
+        quote:
+          oneOf:
+            - $ref: "#/components/schemas/MarketDataQuote"
+            - type: "null"
+        lastSuccessfulUpdateAt:
+          type: ["integer", "null"]
+        warnings:
+          type: array
+          items:
+            type: string
+        analysis:
+          $ref: "#/components/schemas/TradingAnalysisResponse"
+    MarketDataErrorResponse:
+      type: object
+      required: [code, error]
+      properties:
+        code:
+          type: string
+          enum:
+            - PROVIDER_NOT_CONFIGURED
+            - PROVIDER_UNAVAILABLE
+            - PROVIDER_RATE_LIMITED
+            - REQUEST_RATE_LIMITED
+            - SYMBOL_UNSUPPORTED
+            - PROVIDER_DATA_INVALID
+            - PROVIDER_TIMEOUT
+        error:
+          type: string
+        retryAfterSeconds:
+          type: ["integer", "null"]
 

@@ -11,5 +11,7 @@ export type TradingAnalysisResponseDataSource = typeof TradingAnalysisResponseDa
 
 export const TradingAnalysisResponseDataSource = {
   user_supplied_historical: 'user_supplied_historical',
+  provider_live: 'provider_live',
+  provider_delayed: 'provider_delayed',
   unavailable: 'unavailable',
 } as const;

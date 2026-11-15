@@ -1,13 +1,24 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mutateMock, useAnalyzeTradingMock } = vi.hoisted(() => ({
+const {
+  mutateMock,
+  providerMutateMock,
+  useAnalyzeTradingMock,
+  useAnalyzeMarketDataMock,
+  useGetMarketDataStatusMock,
+} = vi.hoisted(() => ({
   mutateMock: vi.fn(),
+  providerMutateMock: vi.fn(),
   useAnalyzeTradingMock: vi.fn(),
+  useAnalyzeMarketDataMock: vi.fn(),
+  useGetMarketDataStatusMock: vi.fn(),
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
   useAnalyzeTrading: useAnalyzeTradingMock,
+  useAnalyzeMarketData: useAnalyzeMarketDataMock,
+  useGetMarketDataStatus: useGetMarketDataStatusMock,
 }));
 vi.mock("../../context/AuthContext", () => ({
   useAuth: () => ({ session: { access_token: "test-member-token" } }),
@@ -62,6 +73,7 @@ const noTradeResult = {
 describe("TradingPage", () => {
   beforeEach(() => {
     mutateMock.mockReset();
+    providerMutateMock.mockReset();
     useAnalyzeTradingMock.mockImplementation(() => ({
       mutate: (variables: unknown, options?: { onSuccess?: (value: typeof noTradeResult) => void }) => {
         mutateMock(variables);
@@ -71,13 +83,54 @@ describe("TradingPage", () => {
       isError: false,
       error: null,
     }));
+    useAnalyzeMarketDataMock.mockImplementation(() => ({
+      mutate: (variables: unknown, options?: { onSuccess?: (value: unknown) => void }) => {
+        providerMutateMock(variables);
+        options?.onSuccess?.({
+          providerId: "twelvedata",
+          providerName: "Twelve Data",
+          providerSymbol: "XAU/USD",
+          providerExchange: "Test Exchange",
+          dataMode: "live",
+          freshness: "fresh",
+          quote: {
+            symbol: "XAU/USD",
+            exchange: "Test Exchange",
+            price: 2350.25,
+            timestamp: 1_799_999_900_000,
+            marketOpen: true,
+          },
+          lastSuccessfulUpdateAt: 1_800_000_000_000,
+          warnings: [],
+          analysis: { ...noTradeResult, dataSource: "provider_live" },
+        });
+      },
+      isPending: false,
+      isError: false,
+      error: null,
+    }));
+    useGetMarketDataStatusMock.mockImplementation(() => ({
+      data: {
+        providerId: "none",
+        providerName: "No provider selected",
+        connectionState: "configuration_required",
+        dataMode: "unavailable",
+        lastSuccessfulUpdateAt: null,
+        supportedInstrumentClasses: ["gold", "bitcoin", "forex", "index"],
+        message: "Provider configuration is required. CSV imports remain available.",
+      },
+      refetch: vi.fn(),
+      isLoading: false,
+      isError: false,
+    }));
   });
   afterEach(() => cleanup());
 
-  it("states that live data is unavailable and does not show the previous fictional setup", () => {
+  it("shows the actual provider readiness and does not show fictional market data", () => {
     render(<TradingPage />);
-    expect(screen.getByText("No live data provider")).toBeTruthy();
-    expect(screen.getByText(/no live or delayed market feed is connected/i)).toBeTruthy();
+    expect(screen.getByTestId("status-market-data").textContent).toBe("Configuration required");
+    expect(screen.getByText(/provider configuration is required/i)).toBeTruthy();
+    expect(screen.getByTestId("button-analyze-provider").hasAttribute("disabled")).toBe(true);
     expect(screen.queryByText("Sample #842")).toBeNull();
     expect(screen.queryByText("2,184.30")).toBeNull();
     expect(screen.queryByText("Valid Setup")).toBeNull();
@@ -103,5 +156,30 @@ describe("TradingPage", () => {
     const decision = await screen.findByTestId("status-trading-decision");
     expect(decision.textContent).toBe("NO_TRADE");
     expect(screen.getByText("User-supplied historical data")).toBeTruthy();
+  });
+
+  it("uses the protected provider-analysis request and displays real source metadata", async () => {
+    useGetMarketDataStatusMock.mockImplementation(() => ({
+      data: {
+        providerId: "twelvedata",
+        providerName: "Twelve Data",
+        connectionState: "disconnected",
+        dataMode: "live",
+        lastSuccessfulUpdateAt: null,
+        supportedInstrumentClasses: ["gold", "bitcoin", "forex", "index"],
+        message: "Provider is configured; fetch data to verify connectivity.",
+      },
+      refetch: vi.fn(),
+      isLoading: false,
+      isError: false,
+    }));
+    render(<TradingPage />);
+    fireEvent.click(screen.getByTestId("button-analyze-provider"));
+
+    await waitFor(() => expect(providerMutateMock).toHaveBeenCalledTimes(1));
+    expect(providerMutateMock.mock.calls[0][0]).toEqual({ data: { symbol: "XAUUSD" } });
+    expect(await screen.findByText("Live provider data")).toBeTruthy();
+    expect(screen.getByText("Data by Twelve Data")).toBeTruthy();
+    expect(screen.getByTestId("status-trading-decision").textContent).toBe("NO_TRADE");
   });
 });
